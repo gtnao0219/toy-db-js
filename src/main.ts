@@ -6,12 +6,13 @@ import { Tuple } from "./storage/table/tuple";
 import { Schema } from "./catalog/schema";
 import { Column } from "./catalog/column";
 import { Type } from "./type/type";
-import { BooleanValue, IntegerValue } from "./type/value";
+import { BooleanValue, IntegerValue, StringValue } from "./type/value";
 import { TableHeap } from "./storage/table/table_heap";
 
 // TEMP
 const schema = new Schema([
   new Column("id", Type.INTEGER),
+  new Column("name", Type.STRING),
   new Column("deleted", Type.BOOLEAN),
 ]);
 
@@ -36,12 +37,13 @@ rl.on("line", (line) => {
         .map((tuple) => tuple.values.map((value) => value.value).join(", "))
         .join("\n")
     );
-  } else if (tokens.length === 3 && tokens[0] === "insert") {
+  } else if (tokens.length === 4 && tokens[0] === "insert") {
     const tableHeap = TableHeap.get(bufferPoolManager, schema, 0);
     tableHeap.insertTuple(
       new Tuple(null, schema, [
         new IntegerValue(parseInt(tokens[1])),
-        new BooleanValue(tokens[2] === "true"),
+        new StringValue(tokens[2]),
+        new BooleanValue(tokens[3] === "true"),
       ])
     );
     console.log("inserted!");

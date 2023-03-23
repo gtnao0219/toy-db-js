@@ -1,4 +1,4 @@
-export const PAGE_SIZE = 35;
+export const PAGE_SIZE = 128;
 
 export const INVALID_PAGE_ID = -1;
 
