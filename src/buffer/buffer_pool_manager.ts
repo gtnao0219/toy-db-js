@@ -1,27 +1,24 @@
 import { DiskManager } from "../storage/disk/disk_manager";
 import { Page, PageType } from "../storage/page/page";
+import { TablePage } from "../storage/page/table_page";
 import { LRUReplacer } from "./lru_replacer";
 import { Replacer } from "./replacer";
 
 const POOL_SIZE = 10;
 
 export class BufferPoolManager {
-  private diskManager: DiskManager;
-  private pages: Array<Page | null>;
-  private pageTable: Map<number, number>;
-  private freeFrameIds: number[];
-  private replacer: Replacer;
   constructor(
-    diskManager: DiskManager,
-    replacer: Replacer = new LRUReplacer()
-  ) {
-    this.diskManager = diskManager;
-    this.pages = new Array(POOL_SIZE).fill(0).map((_) => null);
-    this.pageTable = new Map();
-    this.freeFrameIds = new Array(POOL_SIZE).fill(0).map((_, i) => i);
-    this.replacer = replacer;
-  }
-  fetchPage(pageId: number): Page | null {
+    private _diskManager: DiskManager,
+    private _replacer: Replacer = new LRUReplacer(),
+    private _pages: Array<Page | null> = new Array(POOL_SIZE)
+      .fill(0)
+      .map((_) => null),
+    private _pageTable: Map<number, number> = new Map(),
+    private _freeFrameIds: number[] = new Array(POOL_SIZE)
+      .fill(0)
+      .map((_, i) => i)
+  ) {}
+  fetchPage(pageId: number, pageType: PageType): Page | null {
     const frameId = this.getFrameId(pageId);
     if (frameId != null) {
       const page = this.getPage(frameId);
@@ -29,19 +26,18 @@ export class BufferPoolManager {
         return null;
       }
       page.addPinCount();
-      this.replacer.pin(frameId);
+      this._replacer.pin(frameId);
       return page;
     }
     const availableFrameId = this.getAvailableFrameId();
     if (availableFrameId == null) {
       return null;
     }
-    // TODO: page type
-    const page = this.diskManager.readPage(pageId, PageType.TABLE_PAGE);
-    this.pages[availableFrameId] = page;
-    this.pageTable.set(pageId, availableFrameId);
+    const page = this._diskManager.readPage(pageId, pageType);
+    this._pages[availableFrameId] = page;
+    this._pageTable.set(pageId, availableFrameId);
     page.addPinCount();
-    this.replacer.pin(availableFrameId);
+    this._replacer.pin(availableFrameId);
     return page;
   }
   unpinPage(pageId: number, isDirty: boolean): void {
@@ -57,8 +53,8 @@ export class BufferPoolManager {
       page.markDirty();
     }
     page.subPinCount();
-    if (page.getPinCount() === 0) {
-      this.replacer.unpin(frameId);
+    if (page.pinCount === 0) {
+      this._replacer.unpin(frameId);
     }
   }
   flushPage(pageId: number): void {
@@ -70,32 +66,54 @@ export class BufferPoolManager {
     if (page == null) {
       return;
     }
-    if (page.isDirty()) {
-      this.diskManager.writePage(page);
+    if (page.isDirty) {
+      this._diskManager.writePage(page);
     }
-    this.pages[frameId] = null;
-    this.pageTable.delete(pageId);
-    this.freeFrameIds.push(frameId);
+    this._pages[frameId] = null;
+    this._pageTable.delete(pageId);
+    this._freeFrameIds.push(frameId);
     // TODO: replacer
   }
   flushAllPages(): void {
-    this.pages.forEach((page) => {
-      if (page != null && page.isDirty()) {
-        this.diskManager.writePage(page);
+    this._pages.forEach((page) => {
+      if (page != null && page.isDirty) {
+        this._diskManager.writePage(page);
       }
     });
   }
+  newPage(pageType: PageType): Page | null {
+    const availableFrameId = this.getAvailableFrameId();
+    if (availableFrameId == null) {
+      return null;
+    }
+    const pageId = this._diskManager.allocatePage();
+    const page = this.newEmptyPage(pageId, pageType);
+    page.markDirty();
+    this._pages[availableFrameId] = page;
+    this._pageTable.set(pageId, availableFrameId);
+    page.addPinCount();
+    this._replacer.pin(availableFrameId);
+    return page;
+  }
+  private newEmptyPage(pageId: number, pageType: PageType): Page {
+    switch (pageType) {
+      case PageType.TABLE_PAGE:
+        return TablePage.newEmptyTablePage(pageId);
+      case PageType.HEADER_PAGE:
+        return TablePage.newEmptyTablePage(pageId);
+    }
+  }
   private getPage(frameId: number): Page | null {
-    return this.pages[frameId] ?? null;
+    return this._pages[frameId] ?? null;
   }
   private getFrameId(pageId: number): number | null {
-    return this.pageTable.get(pageId) ?? null;
+    return this._pageTable.get(pageId) ?? null;
   }
   private getAvailableFrameId(): number | null {
-    if (this.freeFrameIds.length !== 0) {
-      return this.freeFrameIds.pop() ?? null;
+    if (this._freeFrameIds.length !== 0) {
+      return this._freeFrameIds.pop() ?? null;
     }
-    const frameId = this.replacer.victim();
+    const frameId = this._replacer.victim();
     if (frameId == null) {
       return null;
     }
@@ -103,10 +121,10 @@ export class BufferPoolManager {
     if (page == null) {
       return null;
     }
-    if (page.isDirty()) {
-      this.diskManager.writePage(page);
+    if (page.isDirty) {
+      this._diskManager.writePage(page);
     }
-    this.pageTable.delete(page.getPageId());
+    this._pageTable.delete(page.pageId);
     return frameId;
   }
 }

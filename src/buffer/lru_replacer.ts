@@ -1,29 +1,26 @@
 import { Replacer } from "./replacer";
 
 export class LRUReplacer implements Replacer {
-  private frameMap: Map<number, number>;
-  constructor() {
-    this.frameMap = new Map();
-  }
+  constructor(private _frameMap: Map<number, number> = new Map()) {}
   victim(): number | null {
-    if (this.frameMap.size === 0) {
+    if (this._frameMap.size === 0) {
       return null;
     }
     let minTime = Number.MAX_SAFE_INTEGER;
     let minFrameId = -1;
-    for (const [frameId, timestamp] of this.frameMap) {
+    for (const [frameId, timestamp] of this._frameMap) {
       if (timestamp < minTime) {
         minTime = timestamp;
         minFrameId = frameId;
       }
     }
-    this.frameMap.delete(minFrameId);
+    this._frameMap.delete(minFrameId);
     return minFrameId;
   }
   pin(frameId: number): void {
-    this.frameMap.delete(frameId);
+    this._frameMap.delete(frameId);
   }
   unpin(frameId: number): void {
-    this.frameMap.set(frameId, new Date().getTime());
+    this._frameMap.set(frameId, new Date().getTime());
   }
 }

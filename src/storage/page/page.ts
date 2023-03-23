@@ -1,37 +1,36 @@
-export const PAGE_SIZE = 4096;
+export const PAGE_SIZE = 35;
 
 export const INVALID_PAGE_ID = -1;
 
 export enum PageType {
   TABLE_PAGE,
+  HEADER_PAGE,
 }
 
 export abstract class Page {
-  protected dirty: boolean;
-  protected pinCount: number;
-  protected pageId: number;
-  constructor() {
-    this.dirty = false;
-    this.pinCount = 0;
-    this.pageId = INVALID_PAGE_ID;
+  constructor(
+    protected _buffer: ArrayBuffer,
+    protected _isDirty: boolean = false,
+    protected _pinCount: number = 0,
+    protected _pageId: number = INVALID_PAGE_ID
+  ) {}
+  get pageId(): number {
+    return this._pageId;
   }
-  getPageId(): number {
-    return this.pageId;
+  get isDirty(): boolean {
+    return this._isDirty;
   }
-  isDirty(): boolean {
-    return this.dirty;
+  get pinCount(): number {
+    return this._pinCount;
   }
   markDirty(): void {
-    this.dirty = true;
-  }
-  getPinCount(): number {
-    return this.pinCount;
+    this._isDirty = true;
   }
   addPinCount(): void {
-    this.pinCount++;
+    this._pinCount++;
   }
   subPinCount(): void {
-    this.pinCount--;
+    this._pinCount--;
   }
   abstract serialize(): ArrayBuffer;
 }
