@@ -3,6 +3,8 @@ export enum PlanType {
   DELETE,
   UPDATE,
   SEQ_SCAN,
+  PROJECTION,
+  FILTER,
 }
 export abstract class PlanNode {
   constructor(protected _planType: PlanType) {}

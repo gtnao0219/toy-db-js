@@ -1,23 +1,22 @@
-import { Value } from "../../type/value";
+import { BoundBaseTableRef } from "../../binder/bound_table_ref";
+import { UpdateAssignment } from "../../binder/statement/update_statement";
 import { PlanNode, PlanType } from "./plan_node";
 
 export class UpdatePlanNode extends PlanNode {
   constructor(
-    private _tableOid: number,
-    private _assignments: {
-      columnIndex: number;
-      value: Value;
-    }[]
+    private _table: BoundBaseTableRef,
+    private _assignments: UpdateAssignment[],
+    private _child: PlanNode
   ) {
     super(PlanType.UPDATE);
   }
-  get tableOid(): number {
-    return this._tableOid;
+  get table(): BoundBaseTableRef {
+    return this._table;
   }
-  get assignments(): {
-    columnIndex: number;
-    value: Value;
-  }[] {
+  get assignments(): UpdateAssignment[] {
     return this._assignments;
+  }
+  get child(): PlanNode {
+    return this._child;
   }
 }

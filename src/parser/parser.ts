@@ -1,5 +1,6 @@
 import {
   AssignmentAST,
+  ConditionAST,
   DeleteStmtAST,
   TableElementAST,
   UpdateStmtAST,
@@ -41,8 +42,8 @@ export class Parser {
     }
   }
   private createTableStmt(): CreateTableStmtAST {
-    this.consumeKeyword("CREATE");
-    this.consumeKeyword("TABLE");
+    this.consumeKeywordOrError("CREATE");
+    this.consumeKeywordOrError("TABLE");
     const tableName = this.consumeIdentifierOrError();
     this.consumeOrError("left_paren");
     const tableElements = [];
@@ -76,10 +77,10 @@ export class Parser {
     };
   }
   private insertStmt(): InsertStmtAST {
-    this.consumeKeyword("INSERT");
-    this.consumeKeyword("INTO");
+    this.consumeKeywordOrError("INSERT");
+    this.consumeKeywordOrError("INTO");
     const tableName = this.consumeIdentifierOrError();
-    this.consumeKeyword("VALUES");
+    this.consumeKeywordOrError("VALUES");
     this.consumeOrError("left_paren");
     const values = [];
     values.push(this.consumeLiteralOrError());
@@ -94,23 +95,33 @@ export class Parser {
     };
   }
   private deleteStmt(): DeleteStmtAST {
-    this.consumeKeyword("DELETE");
-    this.consumeKeyword("FROM");
+    this.consumeKeywordOrError("DELETE");
+    this.consumeKeywordOrError("FROM");
     const tableName = this.consumeIdentifierOrError();
+    let condition: ConditionAST | undefined = undefined;
+    if (this.consumeKeyword("WHERE")) {
+      condition = this.condition();
+    }
     return {
       type: "delete_stmt",
       tableName,
+      condition,
     };
   }
   private updateStmt(): UpdateStmtAST {
-    this.consumeKeyword("UPDATE");
+    this.consumeKeywordOrError("UPDATE");
     const tableName = this.consumeIdentifierOrError();
-    this.consumeKeyword("SET");
+    this.consumeKeywordOrError("SET");
     const assignments = this.assignments();
+    let condition: ConditionAST | undefined = undefined;
+    if (this.consumeKeyword("WHERE")) {
+      condition = this.condition();
+    }
     return {
       type: "update_stmt",
       tableName,
       assignments,
+      condition,
     };
   }
   private assignments(): AssignmentAST[] {
@@ -136,7 +147,7 @@ export class Parser {
     return res;
   }
   private selectStmt(): SelectStmtAST {
-    this.consumeKeyword("SELECT");
+    this.consumeKeywordOrError("SELECT");
     const isAsterisk = this.consume("asterisk");
     const columnNames = [];
     if (!isAsterisk) {
@@ -145,13 +156,28 @@ export class Parser {
         columnNames.push(this.consumeIdentifierOrError());
       }
     }
-    this.consumeKeyword("FROM");
+    this.consumeKeywordOrError("FROM");
     const tableName = this.consumeIdentifierOrError();
+    let condition: ConditionAST | undefined = undefined;
+    if (this.consumeKeyword("WHERE")) {
+      condition = this.condition();
+    }
     return {
       type: "select_stmt",
       tableName,
       isAsterisk,
       columnNames,
+      condition,
+    };
+  }
+  private condition(): ConditionAST {
+    const columnName = this.consumeIdentifierOrError();
+    this.consumeOrError("equal");
+    const right = this.consumeLiteralOrError();
+    return {
+      type: "condition",
+      columnName,
+      right,
     };
   }
   private consume(tokenType: string): boolean {

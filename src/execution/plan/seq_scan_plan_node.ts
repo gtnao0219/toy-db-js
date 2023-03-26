@@ -1,14 +1,11 @@
-import { Schema } from "../../catalog/schema";
+import { BoundBaseTableRef } from "../../binder/bound_table_ref";
 import { PlanNode, PlanType } from "./plan_node";
 
 export class SeqScanPlanNode extends PlanNode {
-  constructor(private _tableOid: number, private _schema: Schema) {
+  constructor(private _table: BoundBaseTableRef) {
     super(PlanType.SEQ_SCAN);
   }
-  get tableOid(): number {
-    return this._tableOid;
-  }
-  get schema(): Schema {
-    return this._schema;
+  get table(): BoundBaseTableRef {
+    return this._table;
   }
 }

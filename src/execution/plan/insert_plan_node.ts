@@ -1,12 +1,13 @@
+import { BoundBaseTableRef } from "../../binder/bound_table_ref";
 import { Value } from "../../type/value";
 import { PlanNode, PlanType } from "./plan_node";
 
 export class InsertPlanNode extends PlanNode {
-  constructor(private _tableOid: number, private _values: Value[]) {
+  constructor(private _table: BoundBaseTableRef, private _values: Value[]) {
     super(PlanType.INSERT);
   }
-  get tableOid(): number {
-    return this._tableOid;
+  get table(): BoundBaseTableRef {
+    return this._table;
   }
   get values(): Value[] {
     return this._values;

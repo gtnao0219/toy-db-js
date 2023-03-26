@@ -62,6 +62,18 @@ export function tokenize(input: string): Token[] {
         case "BOOLEAN":
           tokens.push({ type: "keyword", value: "BOOLEAN" });
           break;
+        case "TRUE":
+          tokens.push({
+            type: "literal",
+            value: { type: "boolean", value: true },
+          });
+          break;
+        case "FALSE":
+          tokens.push({
+            type: "literal",
+            value: { type: "boolean", value: false },
+          });
+          break;
         default:
           tokens.push({ type: "identifier", value: str });
       }

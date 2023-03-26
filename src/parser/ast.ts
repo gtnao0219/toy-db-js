@@ -24,11 +24,10 @@ export type DeleteStmtAST = {
   tableName: string;
   condition?: ConditionAST;
 };
-// TODO: support multiple conditions
+// TODO: support complex condition
 export type ConditionAST = {
   type: "condition";
-  left: string;
-  operator: string;
+  columnName: string;
   right: string | number | boolean;
 };
 export type UpdateStmtAST = {

@@ -4,10 +4,10 @@ import { StatementType } from "../binder/statement/statement";
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Catalog } from "../catalog/catalog";
 import { createExecutor } from "../execution/executor_factory";
-import { getPlan } from "../execution/plan/planner";
+import { planStatement } from "../execution/plan/planner";
 import { Parser } from "../parser/parser";
 import { DiskManager } from "../storage/disk/disk_manager";
-import { Value } from "../type/value";
+import { Tuple } from "../storage/table/tuple";
 
 export class Instance {
   private _diskManager: DiskManager;
@@ -25,7 +25,7 @@ export class Instance {
       this._catalog.initialize();
     }
   }
-  executeSQL(sql: string): Value[][] {
+  executeSQL(sql: string): Tuple[] {
     const parser = new Parser(sql);
     const ast = parser.parse();
     const binder = new Binder(this._catalog);
@@ -38,13 +38,21 @@ export class Instance {
         this._catalog.createTable(statement.tableName, statement.schema);
         return [];
     }
-    const plan = getPlan(statement);
+    const plan = planStatement(statement);
     const executor = createExecutor(
       this._catalog,
       this._bufferPoolManager,
       plan
     );
-    return executor.next();
+    const result: Tuple[] = [];
+    while (true) {
+      const tuple = executor.next();
+      if (tuple === null) {
+        break;
+      }
+      result.push(tuple.tuple);
+    }
+    return result;
   }
   shutdown(): void {
     this._bufferPoolManager.flushAllPages();

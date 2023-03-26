@@ -12,7 +12,11 @@ rl.on("line", (line) => {
   }
   try {
     const result = instance.executeSQL(line);
-    console.log(result);
+    console.log(
+      result
+        .map((row) => row.values.map((value) => value.value).join(", "))
+        .join("\n")
+    );
   } catch (e) {
     console.log(e);
   }

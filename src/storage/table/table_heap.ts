@@ -6,7 +6,7 @@ import { TablePage, TablePageDeserializer } from "../page/table_page";
 import { Tuple } from "./tuple";
 
 // TODO: temp
-type TupleWithRID = {
+export type TupleWithRID = {
   tuple: Tuple;
   rid: RID;
 };

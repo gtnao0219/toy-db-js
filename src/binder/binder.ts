@@ -14,7 +14,12 @@ import { IntegerValue } from "../type/integer_value";
 import { Type } from "../type/type";
 import { Value } from "../type/value";
 import { VarcharValue } from "../type/varchar_value";
-import { BoundColumnRefExpression } from "./bound_expression";
+import {
+  BoundBinaryExpression,
+  BoundColumnRefExpression,
+  BoundExpression,
+  BoundLiteralExpression,
+} from "./bound_expression";
 import { BoundBaseTableRef } from "./bound_table_ref";
 import { CreateTableStatement } from "./statement/create_table_statement";
 import { DeleteStatement } from "./statement/delete_statement";
@@ -62,6 +67,7 @@ export class Binder {
   bindInsert(ast: InsertStmtAST): InsertStatement {
     const tableOid = this._catalog.getOidByTableName(ast.tableName);
     const schema = this._catalog.getSchemaByOid(tableOid);
+    const tableRef = new BoundBaseTableRef(tableOid, schema);
     if (ast.values.length !== schema.columns.length) {
       throw new Error("Number of values does not match number of columns");
     }
@@ -78,15 +84,33 @@ export class Binder {
       }
       throw new Error(`Type mismatch: ${column.type} and ${typeof value}`);
     });
-    return new InsertStatement(tableOid, values);
+    return new InsertStatement(tableRef, values);
   }
   bindDelete(ast: DeleteStmtAST): DeleteStatement {
     const tableOid = this._catalog.getOidByTableName(ast.tableName);
-    return new DeleteStatement(tableOid);
+    const schema = this._catalog.getSchemaByOid(tableOid);
+    const tableRef = new BoundBaseTableRef(tableOid, schema);
+    let predicate: BoundExpression = new BoundLiteralExpression(true);
+    const condition = ast.condition;
+    if (condition != null) {
+      const columnIndex = schema.columns.findIndex(
+        (column) => column.name === condition.columnName
+      );
+      if (columnIndex === -1) {
+        throw new Error(`Column ${condition.columnName} does not exist`);
+      }
+      predicate = new BoundBinaryExpression(
+        new BoundColumnRefExpression(tableRef, columnIndex),
+        "=",
+        new BoundLiteralExpression(condition.right)
+      );
+    }
+    return new DeleteStatement(tableRef, predicate);
   }
   bindUpdate(ast: UpdateStmtAST): UpdateStatement {
     const tableOid = this._catalog.getOidByTableName(ast.tableName);
     const schema = this._catalog.getSchemaByOid(tableOid);
+    const tableRef = new BoundBaseTableRef(tableOid, schema);
     const assignments = ast.assignments.map((assignment) => {
       const columnIndex = schema.columns.findIndex(
         (column) => column.name === assignment.columnName
@@ -121,18 +145,49 @@ export class Binder {
         value,
       };
     });
-    return new UpdateStatement(tableOid, assignments);
+    let predicate: BoundExpression = new BoundLiteralExpression(true);
+    const condition = ast.condition;
+    if (condition != null) {
+      const columnIndex = schema.columns.findIndex(
+        (column) => column.name === condition.columnName
+      );
+      if (columnIndex === -1) {
+        throw new Error(`Column ${condition.columnName} does not exist`);
+      }
+      predicate = new BoundBinaryExpression(
+        new BoundColumnRefExpression(tableRef, columnIndex),
+        "=",
+        new BoundLiteralExpression(condition.right)
+      );
+    }
+    return new UpdateStatement(tableRef, assignments, predicate);
   }
   bindSelect(ast: SelectStmtAST): SelectStatement {
     const tableOid = this._catalog.getOidByTableName(ast.tableName);
     const schema = this._catalog.getSchemaByOid(tableOid);
     const tableRef = new BoundBaseTableRef(tableOid, schema);
+    let predicate: BoundExpression = new BoundLiteralExpression(true);
+    const condition = ast.condition;
+    if (condition != null) {
+      const columnIndex = schema.columns.findIndex(
+        (column) => column.name === condition.columnName
+      );
+      if (columnIndex === -1) {
+        throw new Error(`Column ${condition.columnName} does not exist`);
+      }
+      predicate = new BoundBinaryExpression(
+        new BoundColumnRefExpression(tableRef, columnIndex),
+        "=",
+        new BoundLiteralExpression(condition.right)
+      );
+    }
     if (ast.isAsterisk) {
       return new SelectStatement(
         tableRef,
         schema.columns.map((_, i) => {
-          return new BoundColumnRefExpression(tableOid, i);
-        })
+          return new BoundColumnRefExpression(tableRef, i);
+        }),
+        predicate
       );
     }
     const expressions = ast.columnNames.map((columnName) => {
@@ -142,8 +197,8 @@ export class Binder {
       if (columnIndex === -1) {
         throw new Error(`Column ${columnName} does not exist`);
       }
-      return new BoundColumnRefExpression(tableOid, columnIndex);
+      return new BoundColumnRefExpression(tableRef, columnIndex);
     });
-    return new SelectStatement(tableRef, expressions);
+    return new SelectStatement(tableRef, expressions, predicate);
   }
 }

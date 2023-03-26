@@ -1,11 +1,14 @@
 import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
 import { Catalog } from "../../catalog/catalog";
+import { TupleWithRID } from "../../storage/table/table_heap";
 
 export enum ExecutorType {
   INSERT,
   DELETE,
   UPDATE,
   SEQ_SCAN,
+  PROJECTION,
+  FILTER,
 }
 export abstract class Executor {
   constructor(
@@ -16,5 +19,5 @@ export abstract class Executor {
   get executorType(): ExecutorType {
     return this._executorType;
   }
-  abstract next(): any[][];
+  abstract next(): TupleWithRID | null;
 }
