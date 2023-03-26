@@ -2,9 +2,9 @@ import { Replacer } from "./replacer";
 
 export class LRUReplacer implements Replacer {
   constructor(private _frameMap: Map<number, number> = new Map()) {}
-  victim(): number | null {
+  victim(): number {
     if (this._frameMap.size === 0) {
-      return null;
+      throw new Error("no available frame");
     }
     let minTime = Number.MAX_SAFE_INTEGER;
     let minFrameId = -1;

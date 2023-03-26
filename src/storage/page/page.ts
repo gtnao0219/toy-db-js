@@ -9,10 +9,9 @@ export enum PageType {
 
 export abstract class Page {
   constructor(
-    protected _buffer: ArrayBuffer,
+    protected _pageId: number = INVALID_PAGE_ID,
     protected _isDirty: boolean = false,
-    protected _pinCount: number = 0,
-    protected _pageId: number = INVALID_PAGE_ID
+    protected _pinCount: number = 0
   ) {}
   get pageId(): number {
     return this._pageId;
@@ -33,4 +32,8 @@ export abstract class Page {
     this._pinCount--;
   }
   abstract serialize(): ArrayBuffer;
+}
+
+export interface PageDeserializer {
+  deserialize(arrayBuffer: ArrayBuffer): Page;
 }

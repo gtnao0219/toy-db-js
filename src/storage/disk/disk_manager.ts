@@ -1,32 +1,29 @@
 import fs from "fs";
-import { PAGE_SIZE, Page, PageType } from "../page/page";
-import { TablePage } from "../page/table_page";
-import { HeaderPage } from "../page/header_page";
+import { PAGE_SIZE, Page, PageDeserializer } from "../page/page";
 
-const DATA_FILE_NAME = "data";
+const DEFAULT_DATA_FILE_NAME = "data";
 
 export class DiskManager {
-  init(): boolean {
-    if (fs.existsSync(DATA_FILE_NAME)) {
-      return false;
+  constructor(private _data_file_name: string = DEFAULT_DATA_FILE_NAME) {}
+  existsDataFile(): boolean {
+    return fs.existsSync(this._data_file_name);
+  }
+  createDataFile(): void {
+    if (this.existsDataFile()) {
+      return;
     }
-    const fd = fs.openSync(DATA_FILE_NAME, "w");
+    const fd = fs.openSync(this._data_file_name, "w");
     fs.writeSync(fd, new DataView(new ArrayBuffer(0)), 0, 0, 0);
-    return true;
   }
-  readPage(pageId: number, pageType: PageType): Page {
+  readPage(pageId: number, pageDeserializer: PageDeserializer): Page {
     const buffer = new ArrayBuffer(PAGE_SIZE);
-    const fd = fs.openSync(DATA_FILE_NAME, "r");
-    fs.readSync(fd, new DataView(buffer), 0, PAGE_SIZE, pageId * PAGE_SIZE);
-    switch (pageType) {
-      case PageType.TABLE_PAGE:
-        return new TablePage(buffer);
-      case PageType.HEADER_PAGE:
-        return new HeaderPage(buffer);
-    }
+    const view = new DataView(buffer);
+    const fd = fs.openSync(this._data_file_name, "r");
+    fs.readSync(fd, view, 0, PAGE_SIZE, pageId * PAGE_SIZE);
+    return pageDeserializer.deserialize(buffer);
   }
-  writePage(page: Page) {
-    const fd = fs.openSync(DATA_FILE_NAME, "r+");
+  writePage(page: Page): void {
+    const fd = fs.openSync(this._data_file_name, "r+");
     fs.writeSync(
       fd,
       new DataView(page.serialize()),
@@ -35,7 +32,19 @@ export class DiskManager {
       page.pageId * PAGE_SIZE
     );
   }
-  allocatePage(): number {
-    return fs.statSync(DATA_FILE_NAME).size / PAGE_SIZE;
+  allocatePageId(): number {
+    const pageId = this.pageCount();
+    const fd = fs.openSync(this._data_file_name, "r+");
+    fs.writeSync(
+      fd,
+      new DataView(new ArrayBuffer(PAGE_SIZE)),
+      0,
+      PAGE_SIZE,
+      pageId * PAGE_SIZE
+    );
+    return pageId;
+  }
+  private pageCount(): number {
+    return fs.statSync(this._data_file_name).size / PAGE_SIZE;
   }
 }

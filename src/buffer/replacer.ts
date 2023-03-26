@@ -1,5 +1,5 @@
 export interface Replacer {
-  victim(): number | null;
+  victim(): number;
   pin(frameId: number): void;
   unpin(frameId: number): void;
 }

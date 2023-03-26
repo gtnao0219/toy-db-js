@@ -1,35 +1,14 @@
 import { Schema } from "../../catalog/schema";
-import {
-  Type,
-  VARIABLE_VALUE_INLINE_OFFSET_SIZE,
-  typeSize,
-} from "../../type/type";
-import {
-  StringValue,
-  Value,
-  deserializeBooleanValue,
-  deserializeIntegerValue,
-  deserializeStringValue,
-  deserializeVariableValueInlineOffset,
-  deserializeVariableValueInlineSize,
-} from "../../type/value";
-
-export type RID = {
-  pageId: number;
-  slotId: number;
-};
+import { BooleanValue } from "../../type/boolean_value";
+import { IntegerValue } from "../../type/integer_value";
+import { StringValue } from "../../type/string_value";
+import { Type, typeSize } from "../../type/type";
+import { Value, VariableValue } from "../../type/value";
 
 export class Tuple {
-  constructor(
-    private _rid: RID | null,
-    private _schema: Schema,
-    private _values: Value[]
-  ) {}
+  constructor(private _schema: Schema, private _values: Value[]) {}
   get values(): Value[] {
     return this._values;
-  }
-  set rid(_rid: RID) {
-    this._rid = _rid;
   }
   serialize(): ArrayBuffer {
     const inlineValuesSize = this._schema.columns.reduce(
@@ -38,7 +17,7 @@ export class Tuple {
     );
     const variableValuesSize = this._schema.columns.reduce((acc, _, index) => {
       const value = this._values[index];
-      if (value instanceof StringValue) {
+      if (value instanceof VariableValue) {
         return acc + value.size();
       }
       return acc;
@@ -47,9 +26,9 @@ export class Tuple {
     const buffer = new ArrayBuffer(size);
     const dataView = new DataView(buffer);
     let offset = 0;
-    let variableValueOffset = 0;
+    let variableValueOffset = inlineValuesSize;
     this._values.forEach((value) => {
-      if (value instanceof StringValue) {
+      if (value instanceof VariableValue) {
         const inlineBuffer = value.serializeInline(variableValueOffset);
         const inlineDataView = new DataView(inlineBuffer);
         for (let i = 0; i < inlineDataView.byteLength; ++i) {
@@ -59,10 +38,7 @@ export class Tuple {
         const variableBuffer = value.serialize();
         const variableDataView = new DataView(variableBuffer);
         for (let i = 0; i < variableDataView.byteLength; ++i) {
-          dataView.setInt8(
-            inlineValuesSize + variableValueOffset,
-            variableDataView.getInt8(i)
-          );
+          dataView.setInt8(variableValueOffset, variableDataView.getInt8(i));
           ++variableValueOffset;
         }
       } else {
@@ -78,49 +54,27 @@ export class Tuple {
   }
 }
 
-export function deserializeTuple(
-  buffer: ArrayBuffer,
-  rid: RID,
-  schema: Schema
-): Tuple {
-  const inlineValuesSize = schema.columns.reduce(
-    (acc, column) => acc + typeSize(column.type),
-    0
-  );
+export function deserializeTuple(buffer: ArrayBuffer, schema: Schema): Tuple {
   const values: Value[] = [];
   let offset = 0;
   schema.columns.forEach((column) => {
     switch (column.type) {
       case Type.INTEGER: {
-        values.push(deserializeIntegerValue(buffer, offset));
+        values.push(IntegerValue.deserialize(buffer, offset));
         offset += typeSize(Type.INTEGER);
         break;
       }
       case Type.BOOLEAN: {
-        values.push(deserializeBooleanValue(buffer, offset));
+        values.push(BooleanValue.deserialize(buffer, offset));
         offset += typeSize(Type.INTEGER);
         break;
       }
       case Type.STRING: {
-        const variableValueOffset = deserializeVariableValueInlineOffset(
-          buffer,
-          offset
-        );
-        const variableValueSize = deserializeVariableValueInlineSize(
-          buffer,
-          offset + VARIABLE_VALUE_INLINE_OFFSET_SIZE
-        );
-        values.push(
-          deserializeStringValue(
-            buffer,
-            inlineValuesSize + variableValueOffset,
-            variableValueSize
-          )
-        );
+        values.push(StringValue.deserialize(buffer, offset));
         offset += typeSize(Type.STRING);
         break;
       }
     }
   });
-  return new Tuple(rid, schema, values);
+  return new Tuple(schema, values);
 }

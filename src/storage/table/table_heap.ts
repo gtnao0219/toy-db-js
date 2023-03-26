@@ -1,52 +1,58 @@
 import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
 import { Schema } from "../../catalog/schema";
 import { INVALID_PAGE_ID, PageType } from "../page/page";
-import { TablePage } from "../page/table_page";
+import { TablePage, TablePageDeserializer } from "../page/table_page";
 import { Tuple } from "./tuple";
 
 export class TableHeap {
   private constructor(
     private _bufferPoolManager: BufferPoolManager,
-    private _schema: Schema,
-    private _firstPageId: number
+    private _oid: number,
+    private _firstPageId: number,
+    private _schema: Schema
   ) {}
-  static get(
+  static new(
     _bufferPoolManager: BufferPoolManager,
-    _schema: Schema,
-    firstPageId: number
+    _oid: number,
+    _firstPageId: number,
+    _schema: Schema
   ): TableHeap {
-    return new TableHeap(_bufferPoolManager, _schema, firstPageId);
+    return new TableHeap(_bufferPoolManager, _oid, _firstPageId, _schema);
   }
   static create(
     _bufferPoolManager: BufferPoolManager,
+    _oid: number,
     _schema: Schema
-  ): TableHeap | null {
+  ): TableHeap {
     const page = _bufferPoolManager.newPage(PageType.TABLE_PAGE);
-    if (page == null || !(page instanceof TablePage)) {
-      return null;
-    }
     _bufferPoolManager.unpinPage(page.pageId, true);
-    return new TableHeap(_bufferPoolManager, _schema, page.pageId);
+    return new TableHeap(_bufferPoolManager, _oid, page.pageId, _schema);
   }
-  // TEMP
+  get firstPageId(): number {
+    return this._firstPageId;
+  }
+  get schema(): Schema {
+    return this._schema;
+  }
+  // TODO: implement iterator
   scan(): Tuple[] {
     const tuples: Tuple[] = [];
     let pageId = this._firstPageId;
     while (true) {
-      if (pageId == null || pageId == INVALID_PAGE_ID) {
+      if (pageId == INVALID_PAGE_ID) {
         return tuples;
       }
       const page = this._bufferPoolManager.fetchPage(
         pageId,
-        PageType.TABLE_PAGE
+        new TablePageDeserializer(this._schema)
       );
-      if (page == null || !(page instanceof TablePage)) {
-        return tuples;
+      if (!(page instanceof TablePage)) {
+        throw new Error("invalid page type");
       }
-      page.init(this._schema);
       tuples.push(...page.tuples);
+      const prevPageId = pageId;
       pageId = page.nextPageId;
-      this._bufferPoolManager.unpinPage(pageId, false);
+      this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
   insertTuple(tuple: Tuple): void {
@@ -55,18 +61,16 @@ export class TableHeap {
     while (true) {
       if (pageId === INVALID_PAGE_ID) {
         const newPage = this._bufferPoolManager.newPage(PageType.TABLE_PAGE);
-        if (newPage == null || !(newPage instanceof TablePage)) {
-          return;
+        if (!(newPage instanceof TablePage)) {
+          throw new Error("invalid page type");
         }
-        newPage.prevPageId = prevPageId;
         const prevPage = this._bufferPoolManager.fetchPage(
           prevPageId,
-          PageType.TABLE_PAGE
+          new TablePageDeserializer(this._schema)
         );
-        if (prevPage == null || !(prevPage instanceof TablePage)) {
-          return;
+        if (!(prevPage instanceof TablePage)) {
+          throw new Error("invalid page type");
         }
-        prevPage.init(this._schema);
         prevPage.nextPageId = newPage.pageId;
         this._bufferPoolManager.unpinPage(prevPageId, true);
         newPage.insertTuple(tuple);
@@ -76,12 +80,11 @@ export class TableHeap {
 
       const page = this._bufferPoolManager.fetchPage(
         pageId,
-        PageType.TABLE_PAGE
+        new TablePageDeserializer(this._schema)
       );
-      if (page == null || !(page instanceof TablePage)) {
-        return;
+      if (!(page instanceof TablePage)) {
+        throw new Error("invalid page type");
       }
-      page.init(this._schema);
       if (page.insertTuple(tuple)) {
         this._bufferPoolManager.unpinPage(pageId, true);
         return;
@@ -91,6 +94,4 @@ export class TableHeap {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  begin(): void {}
-  end(): void {}
 }

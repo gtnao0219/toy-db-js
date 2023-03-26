@@ -26,3 +26,15 @@ export function typeSize(type: Type): number {
       return VARIABLE_VALUE_INLINE_SIZE;
   }
 }
+export function string2Type(str: string): Type {
+  switch (str.toUpperCase()) {
+    case "INTEGER":
+      return Type.INTEGER;
+    case "BOOLEAN":
+      return Type.BOOLEAN;
+    case "STRING":
+      return Type.STRING;
+    default:
+      throw new Error(`Unknown type: ${str}`);
+  }
+}
