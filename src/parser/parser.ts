@@ -1,4 +1,9 @@
-import { TableElementAST } from "./ast";
+import {
+  AssignmentAST,
+  DeleteStmtAST,
+  TableElementAST,
+  UpdateStmtAST,
+} from "./ast";
 import { InsertStmtAST } from "./ast";
 import { SelectStmtAST } from "./ast";
 import { CreateTableStmtAST } from "./ast";
@@ -21,12 +26,16 @@ export class Parser {
       throw new Error(`Expected keyword but got ${token.type}`);
     }
     switch (token.value) {
-      case "INSERT":
-        return this.insertStmt();
-      case "SELECT":
-        return this.selectStmt();
       case "CREATE":
         return this.createTableStmt();
+      case "INSERT":
+        return this.insertStmt();
+      case "DELETE":
+        return this.deleteStmt();
+      case "UPDATE":
+        return this.updateStmt();
+      case "SELECT":
+        return this.selectStmt();
       default:
         throw new Error(`Unexpected keyword ${token.value}`);
     }
@@ -83,6 +92,48 @@ export class Parser {
       tableName,
       values,
     };
+  }
+  private deleteStmt(): DeleteStmtAST {
+    this.consumeKeyword("DELETE");
+    this.consumeKeyword("FROM");
+    const tableName = this.consumeIdentifierOrError();
+    return {
+      type: "delete_stmt",
+      tableName,
+    };
+  }
+  private updateStmt(): UpdateStmtAST {
+    this.consumeKeyword("UPDATE");
+    const tableName = this.consumeIdentifierOrError();
+    this.consumeKeyword("SET");
+    const assignments = this.assignments();
+    return {
+      type: "update_stmt",
+      tableName,
+      assignments,
+    };
+  }
+  private assignments(): AssignmentAST[] {
+    const res: AssignmentAST[] = [];
+    const columnName = this.consumeIdentifierOrError();
+    this.consumeOrError("equal");
+    const value = this.consumeLiteralOrError();
+    res.push({
+      type: "assignment",
+      columnName,
+      value,
+    });
+    while (this.consume("comma")) {
+      const columnName = this.consumeIdentifierOrError();
+      this.consumeOrError("equals");
+      const value = this.consumeLiteralOrError();
+      res.push({
+        type: "assignment",
+        columnName,
+        value,
+      });
+    }
+    return res;
   }
   private selectStmt(): SelectStmtAST {
     this.consumeKeyword("SELECT");

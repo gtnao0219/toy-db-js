@@ -1,8 +1,15 @@
 import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
 import { Schema } from "../../catalog/schema";
+import { RID } from "../../common/RID";
 import { INVALID_PAGE_ID, PageType } from "../page/page";
 import { TablePage, TablePageDeserializer } from "../page/table_page";
 import { Tuple } from "./tuple";
+
+// TODO: temp
+type TupleWithRID = {
+  tuple: Tuple;
+  rid: RID;
+};
 
 export class TableHeap {
   private constructor(
@@ -35,8 +42,8 @@ export class TableHeap {
     return this._schema;
   }
   // TODO: implement iterator
-  scan(): Tuple[] {
-    const tuples: Tuple[] = [];
+  scan(): TupleWithRID[] {
+    const tuples: TupleWithRID[] = [];
     let pageId = this._firstPageId;
     while (true) {
       if (pageId == INVALID_PAGE_ID) {
@@ -49,7 +56,11 @@ export class TableHeap {
       if (!(page instanceof TablePage)) {
         throw new Error("invalid page type");
       }
-      tuples.push(...page.tuples);
+      tuples.push(
+        ...page.tuples.map((tuple, i) => {
+          return { tuple, rid: { pageId, slotId: i } };
+        })
+      );
       const prevPageId = pageId;
       pageId = page.nextPageId;
       this._bufferPoolManager.unpinPage(prevPageId, false);
@@ -93,5 +104,25 @@ export class TableHeap {
       pageId = page.nextPageId;
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
+  }
+  deleteTuple(rid: RID): void {
+    const page = this._bufferPoolManager.fetchPage(
+      rid.pageId,
+      new TablePageDeserializer(this._schema)
+    );
+    if (!(page instanceof TablePage)) {
+      throw new Error("invalid page type");
+    }
+    page.deleteTuple(rid);
+  }
+  updateTuple(rid: RID, tuple: Tuple): void {
+    const page = this._bufferPoolManager.fetchPage(
+      rid.pageId,
+      new TablePageDeserializer(this._schema)
+    );
+    if (!(page instanceof TablePage)) {
+      throw new Error("invalid page type");
+    }
+    page.updateTuple(rid, tuple);
   }
 }

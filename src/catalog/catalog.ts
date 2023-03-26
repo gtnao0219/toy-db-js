@@ -105,8 +105,8 @@ export class Catalog {
   getOidByTableName(tableName: string): number {
     const heap = this.tableInformationSchemaTableHeap();
     for (const tuple of heap.scan()) {
-      if (tuple.values[1].value === tableName) {
-        return tuple.values[0].value;
+      if (tuple.tuple.values[1].value === tableName) {
+        return tuple.tuple.values[0].value;
       }
     }
     throw new Error("Table not found");
@@ -119,8 +119,10 @@ export class Catalog {
     const heap = this.columnInformationSchemaTableHeap();
     const columns: Column[] = [];
     heap.scan().forEach((tuple) => {
-      if (tuple.values[0].value === tableOid) {
-        columns.push(new Column(tuple.values[1].value, tuple.values[2].value));
+      if (tuple.tuple.values[0].value === tableOid) {
+        columns.push(
+          new Column(tuple.tuple.values[1].value, tuple.tuple.values[2].value)
+        );
       }
     });
     return new Schema(columns);

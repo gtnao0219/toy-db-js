@@ -1,4 +1,5 @@
 import { Schema } from "../../catalog/schema";
+import { RID } from "../../common/RID";
 import { Tuple, deserializeTuple } from "../table/tuple";
 import { INVALID_PAGE_ID, PAGE_SIZE, Page, PageDeserializer } from "./page";
 
@@ -78,16 +79,35 @@ export class TablePage extends Page {
   }
   insertTuple(tuple: Tuple): boolean {
     const size = tuple.serialize().byteLength;
-    if (
-      this._upperOffset - this._lowerOffset - TABLE_PAGE_LINE_POINTERS_SIZE <
-      size
-    ) {
+    if (this.freeSpaceSize() < TABLE_PAGE_LINE_POINTERS_SIZE + size) {
       return false;
     }
     this._tuples.push(tuple);
     this._lowerOffset += TABLE_PAGE_LINE_POINTERS_SIZE;
     this._upperOffset -= size;
     return true;
+  }
+  deleteTuple(rid: RID): boolean {
+    const oldTuple = this._tuples[rid.slotId];
+    const oldSize = oldTuple.serialize().byteLength;
+    this._tuples.splice(rid.slotId, 1);
+    this._lowerOffset -= TABLE_PAGE_LINE_POINTERS_SIZE;
+    this._upperOffset += oldSize;
+    return true;
+  }
+  updateTuple(rid: RID, newTuple: Tuple): boolean {
+    const oldTuple = this._tuples[rid.slotId];
+    const oldSize = oldTuple.serialize().byteLength;
+    const newSize = newTuple.serialize().byteLength;
+    if (this.freeSpaceSize() + oldSize < newSize) {
+      return false;
+    }
+    this._tuples[rid.slotId] = newTuple;
+    this._upperOffset += oldSize - newSize;
+    return true;
+  }
+  private freeSpaceSize(): number {
+    return this._upperOffset - this._lowerOffset;
   }
 }
 

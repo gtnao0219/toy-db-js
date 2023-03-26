@@ -35,11 +35,23 @@ export function tokenize(input: string): Token[] {
         case "VALUES":
           tokens.push({ type: "keyword", value: "VALUES" });
           break;
+        case "DELETE":
+          tokens.push({ type: "keyword", value: "DELETE" });
+          break;
+        case "UPDATE":
+          tokens.push({ type: "keyword", value: "UPDATE" });
+          break;
+        case "SET":
+          tokens.push({ type: "keyword", value: "SET" });
+          break;
         case "SELECT":
           tokens.push({ type: "keyword", value: "SELECT" });
           break;
         case "FROM":
           tokens.push({ type: "keyword", value: "FROM" });
+          break;
+        case "WHERE":
+          tokens.push({ type: "keyword", value: "WHERE" });
           break;
         case "INTEGER":
           tokens.push({ type: "keyword", value: "INTEGER" });
@@ -77,6 +89,11 @@ export function tokenize(input: string): Token[] {
     }
     if (char === ")") {
       tokens.push({ type: "right_paren" });
+      current++;
+      continue;
+    }
+    if (char === "=") {
+      tokens.push({ type: "equal" });
       current++;
       continue;
     }

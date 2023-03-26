@@ -18,7 +18,7 @@ export class SeqScanExecutor extends Executor {
         const columnIndex = tableHeap.schema.columns.findIndex((c) => {
           return c.name === column.name;
         });
-        return tuple.values[columnIndex].value;
+        return tuple.tuple.values[columnIndex].value;
       });
     });
     return result;

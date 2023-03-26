@@ -1,4 +1,9 @@
-export type AST = CreateTableStmtAST | InsertStmtAST | SelectStmtAST;
+export type AST =
+  | CreateTableStmtAST
+  | InsertStmtAST
+  | DeleteStmtAST
+  | UpdateStmtAST
+  | SelectStmtAST;
 export type CreateTableStmtAST = {
   type: "create_table_stmt";
   tableName: string;
@@ -14,9 +19,33 @@ export type InsertStmtAST = {
   tableName: string;
   values: Array<string | number | boolean>;
 };
+export type DeleteStmtAST = {
+  type: "delete_stmt";
+  tableName: string;
+  condition?: ConditionAST;
+};
+// TODO: support multiple conditions
+export type ConditionAST = {
+  type: "condition";
+  left: string;
+  operator: string;
+  right: string | number | boolean;
+};
+export type UpdateStmtAST = {
+  type: "update_stmt";
+  tableName: string;
+  assignments: AssignmentAST[];
+  condition?: ConditionAST;
+};
+export type AssignmentAST = {
+  type: "assignment";
+  columnName: string;
+  value: string | number | boolean;
+};
 export type SelectStmtAST = {
   type: "select_stmt";
   tableName: string;
   isAsterisk: boolean;
   columnNames: string[];
+  condition?: ConditionAST;
 };

@@ -4,8 +4,12 @@ export type Keyword =
   | "INSERT"
   | "INTO"
   | "VALUES"
+  | "DELETE"
+  | "UPDATE"
+  | "SET"
   | "SELECT"
   | "FROM"
+  | "WHERE"
   | "INTEGER"
   | "VARCHAR"
   | "BOOLEAN";
@@ -32,6 +36,7 @@ export type Token =
   | CommaToken
   | LeftParenToken
   | RightParenToken
+  | EqualToken
   | KeywordToken
   | EOFToken;
 
@@ -57,6 +62,9 @@ export type LeftParenToken = {
 };
 export type RightParenToken = {
   type: "right_paren";
+};
+export type EqualToken = {
+  type: "equal";
 };
 export type KeywordToken = {
   type: "keyword";

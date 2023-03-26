@@ -1,6 +1,8 @@
 export enum StatementType {
   CREATE_TABLE,
   INSERT,
+  DELETE,
+  UPDATE,
   SELECT,
 }
 export class Statement {
