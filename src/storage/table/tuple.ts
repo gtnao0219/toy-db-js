@@ -1,9 +1,9 @@
 import { Schema } from "../../catalog/schema";
 import { BooleanValue } from "../../type/boolean_value";
 import { IntegerValue } from "../../type/integer_value";
-import { StringValue } from "../../type/string_value";
 import { Type, typeSize } from "../../type/type";
 import { Value, VariableValue } from "../../type/value";
+import { VarcharValue } from "../../type/varchar_value";
 
 export class Tuple {
   constructor(private _schema: Schema, private _values: Value[]) {}
@@ -69,9 +69,9 @@ export function deserializeTuple(buffer: ArrayBuffer, schema: Schema): Tuple {
         offset += typeSize(Type.INTEGER);
         break;
       }
-      case Type.STRING: {
-        values.push(StringValue.deserialize(buffer, offset));
-        offset += typeSize(Type.STRING);
+      case Type.VARCHAR: {
+        values.push(VarcharValue.deserialize(buffer, offset));
+        offset += typeSize(Type.VARCHAR);
         break;
       }
     }

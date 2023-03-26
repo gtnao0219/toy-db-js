@@ -8,8 +8,8 @@ import { INVALID_PAGE_ID, PageType } from "../storage/page/page";
 import { TableHeap } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
 import { IntegerValue } from "../type/integer_value";
-import { StringValue } from "../type/string_value";
 import { Type } from "../type/type";
+import { VarcharValue } from "../type/varchar_value";
 import { Column } from "./column";
 import { Schema } from "./schema";
 
@@ -20,11 +20,11 @@ const TABLE_INFORMATION_SCHEMA_NAME = "table_information_schema";
 const COLUMN_INFORMATION_SCHEMA_NAME = "column_information_schema";
 const TABLE_INFORMATION_SCHEMA_SCHEMA = new Schema([
   new Column("oid", Type.INTEGER),
-  new Column("name", Type.STRING),
+  new Column("name", Type.VARCHAR),
 ]);
 const COLUMN_INFORMATION_SCHEMA_SCHEMA = new Schema([
   new Column("table_oid", Type.INTEGER),
-  new Column("name", Type.STRING),
+  new Column("name", Type.VARCHAR),
   new Column("type", Type.INTEGER),
 ]);
 
@@ -79,7 +79,7 @@ export class Catalog {
     tableInfoHeap.insertTuple(
       new Tuple(TABLE_INFORMATION_SCHEMA_SCHEMA, [
         new IntegerValue(oid),
-        new StringValue(tableName),
+        new VarcharValue(tableName),
       ])
     );
     const columnInfoHeap = this.columnInformationSchemaTableHeap();
@@ -87,7 +87,7 @@ export class Catalog {
       columnInfoHeap.insertTuple(
         new Tuple(COLUMN_INFORMATION_SCHEMA_SCHEMA, [
           new IntegerValue(oid),
-          new StringValue(column.name),
+          new VarcharValue(column.name),
           new IntegerValue(column.type),
         ])
       );
@@ -115,8 +115,7 @@ export class Catalog {
     const oid = this.getOidByTableName(tableName);
     return this.getFirstPageIdByOid(oid);
   }
-  getSchemaByTableName(tableName: string): Schema {
-    const tableOid = this.getOidByTableName(tableName);
+  getSchemaByOid(tableOid: number): Schema {
     const heap = this.columnInformationSchemaTableHeap();
     const columns: Column[] = [];
     heap.scan().forEach((tuple) => {
@@ -126,11 +125,23 @@ export class Catalog {
     });
     return new Schema(columns);
   }
-  getTableHeap(tableName: string): TableHeap {
+  getSchemaByTableName(tableName: string): Schema {
+    const tableOid = this.getOidByTableName(tableName);
+    return this.getSchemaByOid(tableOid);
+  }
+  getTableHeapByOid(tableOid: number): TableHeap {
+    const firstPageId = this.getFirstPageIdByOid(tableOid);
+    const schema = this.getSchemaByOid(tableOid);
+    return TableHeap.new(
+      this._bufferPoolManager,
+      tableOid,
+      firstPageId,
+      schema
+    );
+  }
+  getTableHeapByTableName(tableName: string): TableHeap {
     const oid = this.getOidByTableName(tableName);
-    const firstPageId = this.getFirstPageIdByOid(oid);
-    const schema = this.getSchemaByTableName(tableName);
-    return TableHeap.new(this._bufferPoolManager, oid, firstPageId, schema);
+    return this.getTableHeapByOid(oid);
   }
   headerPageEntries(): HeaderPageEntry[] {
     const entries: HeaderPageEntry[] = [];

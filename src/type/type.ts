@@ -1,14 +1,14 @@
 export enum Type {
   INTEGER,
   BOOLEAN,
-  STRING,
+  VARCHAR,
 }
 export function isInlined(type: Type): boolean {
   switch (type) {
     case Type.INTEGER:
     case Type.BOOLEAN:
       return true;
-    case Type.STRING:
+    case Type.VARCHAR:
       return false;
   }
 }
@@ -22,7 +22,7 @@ export function typeSize(type: Type): number {
       return 4;
     case Type.BOOLEAN:
       return 1;
-    case Type.STRING:
+    case Type.VARCHAR:
       return VARIABLE_VALUE_INLINE_SIZE;
   }
 }
@@ -32,8 +32,8 @@ export function string2Type(str: string): Type {
       return Type.INTEGER;
     case "BOOLEAN":
       return Type.BOOLEAN;
-    case "STRING":
-      return Type.STRING;
+    case "VARCHAR":
+      return Type.VARCHAR;
     default:
       throw new Error(`Unknown type: ${str}`);
   }

@@ -1,9 +1,9 @@
 import { Value } from "../../type/value";
-import { PlanNode, PlanType } from "./plan_node";
+import { Statement, StatementType } from "./statement";
 
-export class InsertPlanNode extends PlanNode {
+export class InsertStatement extends Statement {
   constructor(private _tableOid: number, private _values: Value[]) {
-    super(PlanType.INSERT);
+    super(StatementType.INSERT);
   }
   get tableOid(): number {
     return this._tableOid;
