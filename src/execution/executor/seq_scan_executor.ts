@@ -1,6 +1,6 @@
-import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
-import { Catalog } from "../../catalog/catalog";
+import { LockMode } from "../../concurrency/lock_manager";
 import { TupleWithRID } from "../../storage/table/table_heap";
+import { ExecutorContext } from "../executor_context";
 import { SeqScanPlanNode } from "../plan/seq_scan_plan_node";
 import { Executor, ExecutorType } from "./executor";
 
@@ -10,15 +10,21 @@ export class SeqScanExecutor extends Executor {
   private _cursor: number = 0;
 
   constructor(
-    protected _catalog: Catalog,
-    protected _bufferPoolManager: BufferPoolManager,
+    protected _executorContext: ExecutorContext,
     private _planNode: SeqScanPlanNode
   ) {
-    super(_catalog, _bufferPoolManager, ExecutorType.SEQ_SCAN);
-    const tableHeap = this._catalog.getTableHeapByOid(
+    super(_executorContext, ExecutorType.SEQ_SCAN);
+    const tableHeap = this._executorContext.catalog.getTableHeapByOid(
       this._planNode.table.tableOid
     );
     this._tuples = tableHeap.scan();
+  }
+  init(): void {
+    this._executorContext.lockManager.lockTable(
+      this._executorContext.transaction,
+      LockMode.INTENTION_SHARED,
+      this._planNode.table.tableOid
+    );
   }
   next(): TupleWithRID | null {
     if (this._cursor >= this._tuples.length) {

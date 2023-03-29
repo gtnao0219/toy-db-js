@@ -1,17 +1,18 @@
-import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
-import { Catalog } from "../../catalog/catalog";
 import { TupleWithRID } from "../../storage/table/table_heap";
+import { ExecutorContext } from "../executor_context";
 import { FilterPlanNode } from "../plan/filter_plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class FilterExecutor extends Executor {
   constructor(
-    protected _catalog: Catalog,
-    protected _bufferPoolManager: BufferPoolManager,
+    protected _executorContext: ExecutorContext,
     private _planNode: FilterPlanNode,
     private _child: Executor
   ) {
-    super(_catalog, _bufferPoolManager, ExecutorType.FILTER);
+    super(_executorContext, ExecutorType.FILTER);
+  }
+  init(): void {
+    this._child.init();
   }
   next(): TupleWithRID | null {
     let tuple = this._child.next();

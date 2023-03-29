@@ -8,17 +8,20 @@ import { BooleanValue } from "../../type/boolean_value";
 import { IntegerValue } from "../../type/integer_value";
 import { Type } from "../../type/type";
 import { VarcharValue } from "../../type/varchar_value";
+import { ExecutorContext } from "../executor_context";
 import { ProjectionPlanNode } from "../plan/projection_plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class ProjectionExecutor extends Executor {
   constructor(
-    protected _catalog: Catalog,
-    protected _bufferPoolManager: BufferPoolManager,
+    protected _executorContext: ExecutorContext,
     private _planNode: ProjectionPlanNode,
     private _child: Executor
   ) {
-    super(_catalog, _bufferPoolManager, ExecutorType.PROJECTION);
+    super(_executorContext, ExecutorType.PROJECTION);
+  }
+  init(): void {
+    this._child.init();
   }
   next(): TupleWithRID | null {
     const tuple = this._child.next();

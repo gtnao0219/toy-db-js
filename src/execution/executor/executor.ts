@@ -1,6 +1,5 @@
-import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
-import { Catalog } from "../../catalog/catalog";
 import { TupleWithRID } from "../../storage/table/table_heap";
+import { ExecutorContext } from "../executor_context";
 
 export enum ExecutorType {
   INSERT,
@@ -12,12 +11,12 @@ export enum ExecutorType {
 }
 export abstract class Executor {
   constructor(
-    protected _catalog: Catalog,
-    protected _bufferPoolManager: BufferPoolManager,
+    protected _executorContext: ExecutorContext,
     protected _executorType: ExecutorType
   ) {}
   get executorType(): ExecutorType {
     return this._executorType;
   }
+  abstract init(): void;
   abstract next(): TupleWithRID | null;
 }

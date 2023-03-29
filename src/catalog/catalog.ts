@@ -1,4 +1,5 @@
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
+import { Transaction } from "../concurrency/transaction";
 import {
   HeaderPage,
   HeaderPageDeserializer,
@@ -41,7 +42,7 @@ export class Catalog {
     }
     return maxOid + 1;
   }
-  initialize() {
+  initialize(transaction: Transaction): void {
     const headerPage = this._bufferPoolManager.newPage(PageType.HEADER_PAGE);
     this._bufferPoolManager.unpinPage(headerPage.pageId, true);
     const tableInformationSchemaTableHeap = TableHeap.create(
@@ -64,14 +65,20 @@ export class Catalog {
     );
     this.createTable(
       TABLE_INFORMATION_SCHEMA_NAME,
-      TABLE_INFORMATION_SCHEMA_SCHEMA
+      TABLE_INFORMATION_SCHEMA_SCHEMA,
+      transaction
     );
     this.createTable(
       COLUMN_INFORMATION_SCHEMA_NAME,
-      COLUMN_INFORMATION_SCHEMA_SCHEMA
+      COLUMN_INFORMATION_SCHEMA_SCHEMA,
+      transaction
     );
   }
-  createTable(tableName: string, schema: Schema): void {
+  createTable(
+    tableName: string,
+    schema: Schema,
+    transaction: Transaction
+  ): void {
     const oid = this.nextOid();
     const tableHeap = TableHeap.create(this._bufferPoolManager, oid, schema);
     this.insertHeaderPageEntry(oid, tableHeap.firstPageId);
@@ -80,7 +87,8 @@ export class Catalog {
       new Tuple(TABLE_INFORMATION_SCHEMA_SCHEMA, [
         new IntegerValue(oid),
         new VarcharValue(tableName),
-      ])
+      ]),
+      transaction
     );
     const columnInfoHeap = this.columnInformationSchemaTableHeap();
     for (const column of schema.columns) {
@@ -89,7 +97,8 @@ export class Catalog {
           new IntegerValue(oid),
           new VarcharValue(column.name),
           new IntegerValue(column.type),
-        ])
+        ]),
+        transaction
       );
     }
   }

@@ -1,6 +1,7 @@
 import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
 import { Schema } from "../../catalog/schema";
 import { RID } from "../../common/RID";
+import { Transaction, WriteType } from "../../concurrency/transaction";
 import { INVALID_PAGE_ID, PageType } from "../page/page";
 import { TablePage, TablePageDeserializer } from "../page/table_page";
 import { Tuple } from "./tuple";
@@ -57,16 +58,27 @@ export class TableHeap {
         throw new Error("invalid page type");
       }
       tuples.push(
-        ...page.tuples.map((tuple, i) => {
-          return { tuple, rid: { pageId, slotId: i } };
-        })
+        ...page.tuples
+          .map((tuple, slotId) => {
+            if (
+              tuple == null ||
+              page.isMarkedDelete({
+                pageId,
+                slotId,
+              })
+            ) {
+              return null;
+            }
+            return { tuple, rid: { pageId, slotId } };
+          })
+          .filter((tuple): tuple is TupleWithRID => tuple != null)
       );
       const prevPageId = pageId;
       pageId = page.nextPageId;
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  insertTuple(tuple: Tuple): void {
+  insertTuple(tuple: Tuple, transaction: Transaction): void {
     let prevPageId = INVALID_PAGE_ID;
     let pageId = this._firstPageId;
     while (true) {
@@ -84,7 +96,11 @@ export class TableHeap {
         }
         prevPage.nextPageId = newPage.pageId;
         this._bufferPoolManager.unpinPage(prevPageId, true);
-        newPage.insertTuple(tuple);
+        const rid = newPage.insertTuple(tuple, transaction);
+        if (rid == null) {
+          throw new Error("insert tuple failed");
+        }
+        transaction.addWriteSet(WriteType.INSERT, rid, null, this);
         this._bufferPoolManager.unpinPage(newPage.pageId, true);
         return;
       }
@@ -96,7 +112,9 @@ export class TableHeap {
       if (!(page instanceof TablePage)) {
         throw new Error("invalid page type");
       }
-      if (page.insertTuple(tuple)) {
+      const rid = page.insertTuple(tuple, transaction);
+      if (rid !== null) {
+        transaction.addWriteSet(WriteType.INSERT, rid, null, this);
         this._bufferPoolManager.unpinPage(pageId, true);
         return;
       }
@@ -105,7 +123,7 @@ export class TableHeap {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  deleteTuple(rid: RID): void {
+  markDelete(rid: RID, transaction: Transaction): void {
     const page = this._bufferPoolManager.fetchPage(
       rid.pageId,
       new TablePageDeserializer(this._schema)
@@ -113,9 +131,11 @@ export class TableHeap {
     if (!(page instanceof TablePage)) {
       throw new Error("invalid page type");
     }
-    page.deleteTuple(rid);
+    const oldTuple = page.getTuple(rid);
+    page.markDelete(rid, transaction);
+    transaction.addWriteSet(WriteType.DELETE, rid, oldTuple, this);
   }
-  updateTuple(rid: RID, tuple: Tuple): void {
+  applyDelete(rid: RID, transaction: Transaction): void {
     const page = this._bufferPoolManager.fetchPage(
       rid.pageId,
       new TablePageDeserializer(this._schema)
@@ -123,6 +143,28 @@ export class TableHeap {
     if (!(page instanceof TablePage)) {
       throw new Error("invalid page type");
     }
-    page.updateTuple(rid, tuple);
+    page.applyDelete(rid, transaction);
+  }
+  rollbackDelete(rid: RID, transaction: Transaction): void {
+    const page = this._bufferPoolManager.fetchPage(
+      rid.pageId,
+      new TablePageDeserializer(this._schema)
+    );
+    if (!(page instanceof TablePage)) {
+      throw new Error("invalid page type");
+    }
+    page.rollbackDelete(rid, transaction);
+  }
+  updateTuple(rid: RID, tuple: Tuple, transaction: Transaction): void {
+    const page = this._bufferPoolManager.fetchPage(
+      rid.pageId,
+      new TablePageDeserializer(this._schema)
+    );
+    if (!(page instanceof TablePage)) {
+      throw new Error("invalid page type");
+    }
+    const oldTuple = page.getTuple(rid);
+    page.updateTuple(rid, tuple, transaction);
+    transaction.addWriteSet(WriteType.UPDATE, rid, oldTuple, this);
   }
 }
