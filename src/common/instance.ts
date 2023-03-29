@@ -40,11 +40,11 @@ export class Instance {
       this._catalog
     );
   }
-  executeSQL(sql: string): Tuple[] {
+  async executeSQL(sql: string): Promise<Tuple[]> {
     const parser = new Parser(sql);
     const ast = parser.parse();
     const binder = new Binder(this._catalog);
-    const statement = binder.bind(ast);
+    const statement = await binder.bind(ast);
 
     const transaction = this._transactionManager.begin();
     const executorContext = new ExecutorContext(
@@ -69,11 +69,11 @@ export class Instance {
     }
 
     const plan = planStatement(statement);
-    const result = this._executorEngine.execute(executorContext, plan);
+    const result = await this._executorEngine.execute(executorContext, plan);
     this._transactionManager.commit(transaction);
     return result;
   }
-  shutdown(): void {
-    this._bufferPoolManager.flushAllPages();
+  async shutdown(): Promise<void> {
+    await this._bufferPoolManager.flushAllPages();
   }
 }

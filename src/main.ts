@@ -5,13 +5,13 @@ const instance = new Instance();
 const rl = createInterface(process.stdin);
 const prompt = "> ";
 process.stdout.write(prompt);
-rl.on("line", (line) => {
+rl.on("line", async (line) => {
   if (line.trim() === "exit" || line.trim() === "quit") {
-    instance.shutdown();
+    await instance.shutdown();
     process.exit(0);
   }
   try {
-    const result = instance.executeSQL(line);
+    const result = await instance.executeSQL(line);
     console.log(
       result
         .map((row) => row.values.map((value) => value.value).join(", "))

@@ -30,18 +30,18 @@ import { UpdateStatement } from "./statement/update_statement";
 
 export class Binder {
   constructor(private _catalog: Catalog) {}
-  bind(ast: AST): Statement {
+  async bind(ast: AST): Promise<Statement> {
     switch (ast.type) {
       case "create_table_stmt":
         return this.bindCreateTable(ast as CreateTableStmtAST);
       case "insert_stmt":
-        return this.bindInsert(ast as InsertStmtAST);
+        return await this.bindInsert(ast as InsertStmtAST);
       case "delete_stmt":
-        return this.bindDelete(ast as DeleteStmtAST);
+        return await this.bindDelete(ast as DeleteStmtAST);
       case "update_stmt":
-        return this.bindUpdate(ast as UpdateStmtAST);
+        return await this.bindUpdate(ast as UpdateStmtAST);
       case "select_stmt":
-        return this.bindSelect(ast as SelectStmtAST);
+        return await this.bindSelect(ast as SelectStmtAST);
     }
   }
   bindCreateTable(ast: CreateTableStmtAST): CreateTableStatement {
@@ -64,9 +64,9 @@ export class Binder {
     });
     return new CreateTableStatement(ast.tableName, new Schema(columns));
   }
-  bindInsert(ast: InsertStmtAST): InsertStatement {
-    const tableOid = this._catalog.getOidByTableName(ast.tableName);
-    const schema = this._catalog.getSchemaByOid(tableOid);
+  async bindInsert(ast: InsertStmtAST): Promise<InsertStatement> {
+    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
+    const schema = await this._catalog.getSchemaByOid(tableOid);
     const tableRef = new BoundBaseTableRef(tableOid, schema);
     if (ast.values.length !== schema.columns.length) {
       throw new Error("Number of values does not match number of columns");
@@ -86,9 +86,9 @@ export class Binder {
     });
     return new InsertStatement(tableRef, values);
   }
-  bindDelete(ast: DeleteStmtAST): DeleteStatement {
-    const tableOid = this._catalog.getOidByTableName(ast.tableName);
-    const schema = this._catalog.getSchemaByOid(tableOid);
+  async bindDelete(ast: DeleteStmtAST): Promise<DeleteStatement> {
+    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
+    const schema = await this._catalog.getSchemaByOid(tableOid);
     const tableRef = new BoundBaseTableRef(tableOid, schema);
     let predicate: BoundExpression = new BoundLiteralExpression(true);
     const condition = ast.condition;
@@ -107,9 +107,9 @@ export class Binder {
     }
     return new DeleteStatement(tableRef, predicate);
   }
-  bindUpdate(ast: UpdateStmtAST): UpdateStatement {
-    const tableOid = this._catalog.getOidByTableName(ast.tableName);
-    const schema = this._catalog.getSchemaByOid(tableOid);
+  async bindUpdate(ast: UpdateStmtAST): Promise<UpdateStatement> {
+    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
+    const schema = await this._catalog.getSchemaByOid(tableOid);
     const tableRef = new BoundBaseTableRef(tableOid, schema);
     const assignments = ast.assignments.map((assignment) => {
       const columnIndex = schema.columns.findIndex(
@@ -162,9 +162,9 @@ export class Binder {
     }
     return new UpdateStatement(tableRef, assignments, predicate);
   }
-  bindSelect(ast: SelectStmtAST): SelectStatement {
-    const tableOid = this._catalog.getOidByTableName(ast.tableName);
-    const schema = this._catalog.getSchemaByOid(tableOid);
+  async bindSelect(ast: SelectStmtAST): Promise<SelectStatement> {
+    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
+    const schema = await this._catalog.getSchemaByOid(tableOid);
     const tableRef = new BoundBaseTableRef(tableOid, schema);
     let predicate: BoundExpression = new BoundLiteralExpression(true);
     const condition = ast.condition;

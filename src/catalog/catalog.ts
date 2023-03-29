@@ -32,8 +32,8 @@ const COLUMN_INFORMATION_SCHEMA_SCHEMA = new Schema([
 export class Catalog {
   constructor(private _bufferPoolManager: BufferPoolManager) {}
   // TODO: Refactor
-  nextOid(): number {
-    const entries = this.headerPageEntries();
+  async nextOid(): Promise<number> {
+    const entries = await this.headerPageEntries();
     let maxOid = 0;
     for (const entry of entries) {
       if (entry.oid > maxOid) {
@@ -42,15 +42,17 @@ export class Catalog {
     }
     return maxOid + 1;
   }
-  initialize(transaction: Transaction): void {
-    const headerPage = this._bufferPoolManager.newPage(PageType.HEADER_PAGE);
+  async initialize(transaction: Transaction): Promise<void> {
+    const headerPage = await this._bufferPoolManager.newPage(
+      PageType.HEADER_PAGE
+    );
     this._bufferPoolManager.unpinPage(headerPage.pageId, true);
-    const tableInformationSchemaTableHeap = TableHeap.create(
+    const tableInformationSchemaTableHeap = await TableHeap.create(
       this._bufferPoolManager,
       TABLE_INFORMATION_SCHEMA_OID,
       TABLE_INFORMATION_SCHEMA_SCHEMA
     );
-    const columnInformationSchemaTableHeap = TableHeap.create(
+    const columnInformationSchemaTableHeap = await TableHeap.create(
       this._bufferPoolManager,
       COLUMN_INFORMATION_SCHEMA_OID,
       COLUMN_INFORMATION_SCHEMA_SCHEMA
@@ -74,25 +76,29 @@ export class Catalog {
       transaction
     );
   }
-  createTable(
+  async createTable(
     tableName: string,
     schema: Schema,
     transaction: Transaction
-  ): void {
-    const oid = this.nextOid();
-    const tableHeap = TableHeap.create(this._bufferPoolManager, oid, schema);
+  ): Promise<void> {
+    const oid = await this.nextOid();
+    const tableHeap = await TableHeap.create(
+      this._bufferPoolManager,
+      oid,
+      schema
+    );
     this.insertHeaderPageEntry(oid, tableHeap.firstPageId);
-    const tableInfoHeap = this.tableInformationSchemaTableHeap();
-    tableInfoHeap.insertTuple(
+    const tableInfoHeap = await this.tableInformationSchemaTableHeap();
+    await tableInfoHeap.insertTuple(
       new Tuple(TABLE_INFORMATION_SCHEMA_SCHEMA, [
         new IntegerValue(oid),
         new VarcharValue(tableName),
       ]),
       transaction
     );
-    const columnInfoHeap = this.columnInformationSchemaTableHeap();
+    const columnInfoHeap = await this.columnInformationSchemaTableHeap();
     for (const column of schema.columns) {
-      columnInfoHeap.insertTuple(
+      await columnInfoHeap.insertTuple(
         new Tuple(COLUMN_INFORMATION_SCHEMA_SCHEMA, [
           new IntegerValue(oid),
           new VarcharValue(column.name),
@@ -102,8 +108,8 @@ export class Catalog {
       );
     }
   }
-  getFirstPageIdByOid(oid: number): number {
-    const entries = this.headerPageEntries();
+  async getFirstPageIdByOid(oid: number): Promise<number> {
+    const entries = await this.headerPageEntries();
     for (const entry of entries) {
       if (entry.oid === oid) {
         return entry.firstPageId;
@@ -111,23 +117,25 @@ export class Catalog {
     }
     throw new Error("Table not found");
   }
-  getOidByTableName(tableName: string): number {
-    const heap = this.tableInformationSchemaTableHeap();
-    for (const tuple of heap.scan()) {
+  async getOidByTableName(tableName: string): Promise<number> {
+    const heap = await this.tableInformationSchemaTableHeap();
+    const tuples = await heap.scan();
+    for (const tuple of tuples) {
       if (tuple.tuple.values[1].value === tableName) {
         return tuple.tuple.values[0].value;
       }
     }
     throw new Error("Table not found");
   }
-  getFirstPageIdByTableName(tableName: string): number {
-    const oid = this.getOidByTableName(tableName);
+  async getFirstPageIdByTableName(tableName: string): Promise<number> {
+    const oid = await this.getOidByTableName(tableName);
     return this.getFirstPageIdByOid(oid);
   }
-  getSchemaByOid(tableOid: number): Schema {
-    const heap = this.columnInformationSchemaTableHeap();
+  async getSchemaByOid(tableOid: number): Promise<Schema> {
+    const heap = await this.columnInformationSchemaTableHeap();
     const columns: Column[] = [];
-    heap.scan().forEach((tuple) => {
+    const tuples = await heap.scan();
+    tuples.forEach((tuple) => {
       if (tuple.tuple.values[0].value === tableOid) {
         columns.push(
           new Column(tuple.tuple.values[1].value, tuple.tuple.values[2].value)
@@ -136,13 +144,13 @@ export class Catalog {
     });
     return new Schema(columns);
   }
-  getSchemaByTableName(tableName: string): Schema {
-    const tableOid = this.getOidByTableName(tableName);
+  async getSchemaByTableName(tableName: string): Promise<Schema> {
+    const tableOid = await this.getOidByTableName(tableName);
     return this.getSchemaByOid(tableOid);
   }
-  getTableHeapByOid(tableOid: number): TableHeap {
-    const firstPageId = this.getFirstPageIdByOid(tableOid);
-    const schema = this.getSchemaByOid(tableOid);
+  async getTableHeapByOid(tableOid: number): Promise<TableHeap> {
+    const firstPageId = await this.getFirstPageIdByOid(tableOid);
+    const schema = await this.getSchemaByOid(tableOid);
     return TableHeap.new(
       this._bufferPoolManager,
       tableOid,
@@ -150,18 +158,18 @@ export class Catalog {
       schema
     );
   }
-  getTableHeapByTableName(tableName: string): TableHeap {
-    const oid = this.getOidByTableName(tableName);
+  async getTableHeapByTableName(tableName: string): Promise<TableHeap> {
+    const oid = await this.getOidByTableName(tableName);
     return this.getTableHeapByOid(oid);
   }
-  headerPageEntries(): HeaderPageEntry[] {
+  async headerPageEntries(): Promise<HeaderPageEntry[]> {
     const entries: HeaderPageEntry[] = [];
     let pageId = HEADER_PAGE_ID;
     while (true) {
       if (pageId == INVALID_PAGE_ID) {
         return entries;
       }
-      const page = this._bufferPoolManager.fetchPage(
+      const page = await this._bufferPoolManager.fetchPage(
         pageId,
         new HeaderPageDeserializer()
       );
@@ -174,16 +182,18 @@ export class Catalog {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  insertHeaderPageEntry(oid: number, firstPageId: number): void {
+  async insertHeaderPageEntry(oid: number, firstPageId: number): Promise<void> {
     let prevPageId = INVALID_PAGE_ID;
     let pageId = HEADER_PAGE_ID;
     while (true) {
       if (pageId === INVALID_PAGE_ID) {
-        const newPage = this._bufferPoolManager.newPage(PageType.HEADER_PAGE);
+        const newPage = await this._bufferPoolManager.newPage(
+          PageType.HEADER_PAGE
+        );
         if (!(newPage instanceof HeaderPage)) {
           throw new Error("invalid page type");
         }
-        const prevPage = this._bufferPoolManager.fetchPage(
+        const prevPage = await this._bufferPoolManager.fetchPage(
           prevPageId,
           new HeaderPageDeserializer()
         );
@@ -197,7 +207,7 @@ export class Catalog {
         return;
       }
 
-      const page = this._bufferPoolManager.fetchPage(
+      const page = await this._bufferPoolManager.fetchPage(
         pageId,
         new HeaderPageDeserializer()
       );
@@ -213,8 +223,10 @@ export class Catalog {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  tableInformationSchemaTableHeap(): TableHeap {
-    const firstPageId = this.getFirstPageIdByOid(TABLE_INFORMATION_SCHEMA_OID);
+  async tableInformationSchemaTableHeap(): Promise<TableHeap> {
+    const firstPageId = await this.getFirstPageIdByOid(
+      TABLE_INFORMATION_SCHEMA_OID
+    );
     return TableHeap.new(
       this._bufferPoolManager,
       TABLE_INFORMATION_SCHEMA_OID,
@@ -222,8 +234,10 @@ export class Catalog {
       TABLE_INFORMATION_SCHEMA_SCHEMA
     );
   }
-  columnInformationSchemaTableHeap(): TableHeap {
-    const firstPageId = this.getFirstPageIdByOid(COLUMN_INFORMATION_SCHEMA_OID);
+  async columnInformationSchemaTableHeap(): Promise<TableHeap> {
+    const firstPageId = await this.getFirstPageIdByOid(
+      COLUMN_INFORMATION_SCHEMA_OID
+    );
     return TableHeap.new(
       this._bufferPoolManager,
       COLUMN_INFORMATION_SCHEMA_OID,

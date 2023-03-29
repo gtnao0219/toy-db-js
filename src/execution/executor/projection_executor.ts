@@ -20,11 +20,11 @@ export class ProjectionExecutor extends Executor {
   ) {
     super(_executorContext, ExecutorType.PROJECTION);
   }
-  init(): void {
-    this._child.init();
+  async init(): Promise<void> {
+    await this._child.init();
   }
-  next(): TupleWithRID | null {
-    const tuple = this._child.next();
+  async next(): Promise<TupleWithRID | null> {
+    const tuple = await this._child.next();
     if (tuple === null) {
       return null;
     }

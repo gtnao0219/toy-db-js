@@ -18,7 +18,10 @@ export class BufferPoolManager {
       .fill(0)
       .map((_, i) => i)
   ) {}
-  fetchPage(pageId: number, pageDeserializer: PageDeserializer): Page {
+  async fetchPage(
+    pageId: number,
+    pageDeserializer: PageDeserializer
+  ): Promise<Page> {
     const frameId = this.getFrameId(pageId);
     if (frameId != null) {
       const page = this.getPage(frameId);
@@ -26,17 +29,17 @@ export class BufferPoolManager {
       this._replacer.pin(frameId);
       return page;
     }
-    const availableFrameId = this.getAvailableFrameId();
-    const page = this._diskManager.readPage(pageId, pageDeserializer);
+    const availableFrameId = await this.getAvailableFrameId();
+    const page = await this._diskManager.readPage(pageId, pageDeserializer);
     this._pages[availableFrameId] = page;
     this._pageTable.set(pageId, availableFrameId);
     page.addPinCount();
     this._replacer.pin(availableFrameId);
     return page;
   }
-  newPage(pageType: PageType): Page {
-    const availableFrameId = this.getAvailableFrameId();
-    const pageId = this._diskManager.allocatePageId();
+  async newPage(pageType: PageType): Promise<Page> {
+    const availableFrameId = await this.getAvailableFrameId();
+    const pageId = await this._diskManager.allocatePageId();
     const page = newEmptyPage(pageId, pageType);
     this._pages[availableFrameId] = page;
     this._pageTable.set(pageId, availableFrameId);
@@ -58,23 +61,23 @@ export class BufferPoolManager {
       this._replacer.unpin(frameId);
     }
   }
-  flushPage(pageId: number): void {
+  async flushPage(pageId: number): Promise<void> {
     const frameId = this.getFrameId(pageId);
     if (frameId == null) {
       throw new Error("page is not in buffer pool");
     }
     const page = this.getPage(frameId);
     if (page.isDirty) {
-      this._diskManager.writePage(page);
+      await this._diskManager.writePage(page);
     }
     // TODO: should we delete the page from buffer pool?
   }
-  flushAllPages(): void {
-    this._pages.forEach((page) => {
+  async flushAllPages(): Promise<void> {
+    for (const page of this._pages) {
       if (page != null) {
-        this._diskManager.writePage(page);
+        await this._diskManager.writePage(page);
       }
-    });
+    }
   }
   private getPage(frameId: number): Page {
     const page = this._pages[frameId];
@@ -86,7 +89,7 @@ export class BufferPoolManager {
   private getFrameId(pageId: number): number | null {
     return this._pageTable.get(pageId) ?? null;
   }
-  private getAvailableFrameId(): number {
+  private async getAvailableFrameId(): Promise<number> {
     if (this._freeFrameIds.length !== 0) {
       const frameId = this._freeFrameIds.pop();
       if (frameId == null) {
@@ -97,7 +100,7 @@ export class BufferPoolManager {
     const frameId = this._replacer.victim();
     const page = this.getPage(frameId);
     if (page.isDirty) {
-      this._diskManager.writePage(page);
+      await this._diskManager.writePage(page);
     }
     this._pageTable.delete(page.pageId);
     return frameId;

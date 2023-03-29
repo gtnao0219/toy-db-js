@@ -17,6 +17,6 @@ export abstract class Executor {
   get executorType(): ExecutorType {
     return this._executorType;
   }
-  abstract init(): void;
-  abstract next(): TupleWithRID | null;
+  abstract init(): Promise<void>;
+  abstract next(): Promise<TupleWithRID | null>;
 }

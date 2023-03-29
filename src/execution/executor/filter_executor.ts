@@ -11,16 +11,16 @@ export class FilterExecutor extends Executor {
   ) {
     super(_executorContext, ExecutorType.FILTER);
   }
-  init(): void {
-    this._child.init();
+  async init(): Promise<void> {
+    await this._child.init();
   }
-  next(): TupleWithRID | null {
-    let tuple = this._child.next();
+  async next(): Promise<TupleWithRID | null> {
+    let tuple = await this._child.next();
     while (tuple !== null) {
       if (this._planNode.predicate.evaluate(tuple.tuple)) {
         return tuple;
       }
-      tuple = this._child.next();
+      tuple = await this._child.next();
     }
     return null;
   }

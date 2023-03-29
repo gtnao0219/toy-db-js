@@ -27,12 +27,12 @@ export class TableHeap {
   ): TableHeap {
     return new TableHeap(_bufferPoolManager, _oid, _firstPageId, _schema);
   }
-  static create(
+  static async create(
     _bufferPoolManager: BufferPoolManager,
     _oid: number,
     _schema: Schema
-  ): TableHeap {
-    const page = _bufferPoolManager.newPage(PageType.TABLE_PAGE);
+  ): Promise<TableHeap> {
+    const page = await _bufferPoolManager.newPage(PageType.TABLE_PAGE);
     _bufferPoolManager.unpinPage(page.pageId, true);
     return new TableHeap(_bufferPoolManager, _oid, page.pageId, _schema);
   }
@@ -43,14 +43,14 @@ export class TableHeap {
     return this._schema;
   }
   // TODO: implement iterator
-  scan(): TupleWithRID[] {
+  async scan(): Promise<TupleWithRID[]> {
     const tuples: TupleWithRID[] = [];
     let pageId = this._firstPageId;
     while (true) {
       if (pageId == INVALID_PAGE_ID) {
         return tuples;
       }
-      const page = this._bufferPoolManager.fetchPage(
+      const page = await this._bufferPoolManager.fetchPage(
         pageId,
         new TablePageDeserializer(this._schema)
       );
@@ -78,16 +78,18 @@ export class TableHeap {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  insertTuple(tuple: Tuple, transaction: Transaction): void {
+  async insertTuple(tuple: Tuple, transaction: Transaction): Promise<void> {
     let prevPageId = INVALID_PAGE_ID;
     let pageId = this._firstPageId;
     while (true) {
       if (pageId === INVALID_PAGE_ID) {
-        const newPage = this._bufferPoolManager.newPage(PageType.TABLE_PAGE);
+        const newPage = await this._bufferPoolManager.newPage(
+          PageType.TABLE_PAGE
+        );
         if (!(newPage instanceof TablePage)) {
           throw new Error("invalid page type");
         }
-        const prevPage = this._bufferPoolManager.fetchPage(
+        const prevPage = await this._bufferPoolManager.fetchPage(
           prevPageId,
           new TablePageDeserializer(this._schema)
         );
@@ -105,7 +107,7 @@ export class TableHeap {
         return;
       }
 
-      const page = this._bufferPoolManager.fetchPage(
+      const page = await this._bufferPoolManager.fetchPage(
         pageId,
         new TablePageDeserializer(this._schema)
       );
@@ -123,8 +125,8 @@ export class TableHeap {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  markDelete(rid: RID, transaction: Transaction): void {
-    const page = this._bufferPoolManager.fetchPage(
+  async markDelete(rid: RID, transaction: Transaction): Promise<void> {
+    const page = await this._bufferPoolManager.fetchPage(
       rid.pageId,
       new TablePageDeserializer(this._schema)
     );
@@ -135,8 +137,8 @@ export class TableHeap {
     page.markDelete(rid, transaction);
     transaction.addWriteSet(WriteType.DELETE, rid, oldTuple, this);
   }
-  applyDelete(rid: RID, transaction: Transaction): void {
-    const page = this._bufferPoolManager.fetchPage(
+  async applyDelete(rid: RID, transaction: Transaction): Promise<void> {
+    const page = await this._bufferPoolManager.fetchPage(
       rid.pageId,
       new TablePageDeserializer(this._schema)
     );
@@ -145,8 +147,8 @@ export class TableHeap {
     }
     page.applyDelete(rid, transaction);
   }
-  rollbackDelete(rid: RID, transaction: Transaction): void {
-    const page = this._bufferPoolManager.fetchPage(
+  async rollbackDelete(rid: RID, transaction: Transaction): Promise<void> {
+    const page = await this._bufferPoolManager.fetchPage(
       rid.pageId,
       new TablePageDeserializer(this._schema)
     );
@@ -155,8 +157,12 @@ export class TableHeap {
     }
     page.rollbackDelete(rid, transaction);
   }
-  updateTuple(rid: RID, tuple: Tuple, transaction: Transaction): void {
-    const page = this._bufferPoolManager.fetchPage(
+  async updateTuple(
+    rid: RID,
+    tuple: Tuple,
+    transaction: Transaction
+  ): Promise<void> {
+    const page = await this._bufferPoolManager.fetchPage(
       rid.pageId,
       new TablePageDeserializer(this._schema)
     );

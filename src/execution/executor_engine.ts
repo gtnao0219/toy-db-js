@@ -22,12 +22,15 @@ export class ExecutorEngine {
   get catalog(): Catalog {
     return this._catalog;
   }
-  execute(executorContext: ExecutorContext, plan: PlanNode): Tuple[] {
+  async execute(
+    executorContext: ExecutorContext,
+    plan: PlanNode
+  ): Promise<Tuple[]> {
     const executor = createExecutor(executorContext, plan);
-    executor.init();
+    await executor.init();
     const tuples: Tuple[] = [];
     let tuple: TupleWithRID | null = null;
-    while ((tuple = executor.next()) !== null) {
+    while ((tuple = await executor.next()) !== null) {
       tuples.push(tuple.tuple);
     }
     return tuples;

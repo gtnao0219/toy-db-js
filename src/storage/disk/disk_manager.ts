@@ -1,4 +1,4 @@
-import fs from "fs";
+import { promises as fsp, existsSync } from "fs";
 import { PAGE_SIZE, Page, PageDeserializer } from "../page/page";
 
 const DEFAULT_DATA_FILE_NAME = "data";
@@ -6,45 +6,52 @@ const DEFAULT_DATA_FILE_NAME = "data";
 export class DiskManager {
   constructor(private _data_file_name: string = DEFAULT_DATA_FILE_NAME) {}
   existsDataFile(): boolean {
-    return fs.existsSync(this._data_file_name);
+    return existsSync(this._data_file_name);
   }
-  createDataFile(): void {
-    if (this.existsDataFile()) {
+  async createDataFile(): Promise<void> {
+    const exists = this.existsDataFile();
+    if (exists) {
       return;
     }
-    const fd = fs.openSync(this._data_file_name, "w");
-    fs.writeSync(fd, new DataView(new ArrayBuffer(0)), 0, 0, 0);
+    const fd = await fsp.open(this._data_file_name, "w");
+    await fd.write(new Uint8Array(new ArrayBuffer(0)), 0, 0);
+    await fd.close();
   }
-  readPage(pageId: number, pageDeserializer: PageDeserializer): Page {
+  async readPage(
+    pageId: number,
+    pageDeserializer: PageDeserializer
+  ): Promise<Page> {
     const buffer = new ArrayBuffer(PAGE_SIZE);
     const view = new DataView(buffer);
-    const fd = fs.openSync(this._data_file_name, "r");
-    fs.readSync(fd, view, 0, PAGE_SIZE, pageId * PAGE_SIZE);
+    const fd = await fsp.open(this._data_file_name, "r");
+    await fd.read(view, 0, PAGE_SIZE, pageId * PAGE_SIZE);
+    await fd.close();
     return pageDeserializer.deserialize(buffer);
   }
-  writePage(page: Page): void {
-    const fd = fs.openSync(this._data_file_name, "r+");
-    fs.writeSync(
-      fd,
-      new DataView(page.serialize()),
+  async writePage(page: Page): Promise<void> {
+    const fd = await fsp.open(this._data_file_name, "r+");
+    await fd.write(
+      new Uint8Array(page.serialize()),
       0,
       PAGE_SIZE,
       page.pageId * PAGE_SIZE
     );
+    await fd.close();
   }
-  allocatePageId(): number {
-    const pageId = this.pageCount();
-    const fd = fs.openSync(this._data_file_name, "r+");
-    fs.writeSync(
-      fd,
-      new DataView(new ArrayBuffer(PAGE_SIZE)),
+  async allocatePageId(): Promise<number> {
+    const pageId = await this.pageCount();
+    const fd = await fsp.open(this._data_file_name, "r+");
+    fd.write(
+      new Uint8Array(new ArrayBuffer(PAGE_SIZE)),
       0,
       PAGE_SIZE,
       pageId * PAGE_SIZE
     );
+    await fd.close();
     return pageId;
   }
-  private pageCount(): number {
-    return fs.statSync(this._data_file_name).size / PAGE_SIZE;
+  private async pageCount(): Promise<number> {
+    const stats = await fsp.stat(this._data_file_name);
+    return stats.size / PAGE_SIZE;
   }
 }

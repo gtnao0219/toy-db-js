@@ -6,7 +6,7 @@ import { Executor, ExecutorType } from "./executor";
 
 export class SeqScanExecutor extends Executor {
   // TODO: implement iterator
-  private _tuples: TupleWithRID[];
+  private _tuples: TupleWithRID[] = [];
   private _cursor: number = 0;
 
   constructor(
@@ -14,19 +14,19 @@ export class SeqScanExecutor extends Executor {
     private _planNode: SeqScanPlanNode
   ) {
     super(_executorContext, ExecutorType.SEQ_SCAN);
-    const tableHeap = this._executorContext.catalog.getTableHeapByOid(
-      this._planNode.table.tableOid
-    );
-    this._tuples = tableHeap.scan();
   }
-  init(): void {
+  async init(): Promise<void> {
     this._executorContext.lockManager.lockTable(
       this._executorContext.transaction,
       LockMode.INTENTION_SHARED,
       this._planNode.table.tableOid
     );
+    const tableHeap = await this._executorContext.catalog.getTableHeapByOid(
+      this._planNode.table.tableOid
+    );
+    this._tuples = await tableHeap.scan();
   }
-  next(): TupleWithRID | null {
+  async next(): Promise<TupleWithRID | null> {
     if (this._cursor >= this._tuples.length) {
       return null;
     }

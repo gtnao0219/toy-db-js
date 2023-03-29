@@ -12,7 +12,7 @@ export class InsertExecutor extends Executor {
   ) {
     super(_executorContext, ExecutorType.INSERT);
   }
-  init(): void {
+  async init(): Promise<void> {
     // this._child.init();
     this._executorContext.lockManager.lockTable(
       this._executorContext.transaction,
@@ -20,11 +20,11 @@ export class InsertExecutor extends Executor {
       this._planNode.table.tableOid
     );
   }
-  next(): TupleWithRID | null {
-    const tableHeap = this._executorContext.catalog.getTableHeapByOid(
+  async next(): Promise<TupleWithRID | null> {
+    const tableHeap = await this._executorContext.catalog.getTableHeapByOid(
       this._planNode.table.tableOid
     );
-    tableHeap.insertTuple(
+    await tableHeap.insertTuple(
       new Tuple(tableHeap.schema, this._planNode.values),
       this._executorContext.transaction
     );
