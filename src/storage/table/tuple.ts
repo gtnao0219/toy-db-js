@@ -10,6 +10,9 @@ export class Tuple {
   get values(): Value[] {
     return this._values;
   }
+  get schema(): Schema {
+    return this._schema;
+  }
   serialize(): ArrayBuffer {
     const inlineValuesSize = this._schema.columns.reduce(
       (acc, column) => acc + typeSize(column.type),
