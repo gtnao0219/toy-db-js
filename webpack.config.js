@@ -3,10 +3,13 @@ const path = require("path");
 module.exports = {
   mode: "development",
   target: "node",
-  entry: path.resolve(__dirname, "src", "main.ts"),
+  entry: {
+    server: path.resolve(__dirname, "src", "command", "server.ts"),
+    client: path.resolve(__dirname, "src", "command", "client.ts"),
+  },
   output: {
+    filename: "[name].js",
     path: path.resolve(__dirname, "dist"),
-    filename: "bundle.js",
   },
   module: {
     rules: [
