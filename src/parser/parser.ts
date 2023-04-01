@@ -1,7 +1,10 @@
 import {
   AssignmentAST,
+  BeginStmtAST,
+  CommitStmtAST,
   ConditionAST,
   DeleteStmtAST,
+  RollbackStmtAST,
   TableElementAST,
   UpdateStmtAST,
 } from "./ast";
@@ -37,6 +40,12 @@ export class Parser {
         return this.updateStmt();
       case "SELECT":
         return this.selectStmt();
+      case "BEGIN":
+        return this.beginStmt();
+      case "COMMIT":
+        return this.commitStmt();
+      case "ROLLBACK":
+        return this.rollbackStmt();
       default:
         throw new Error(`Unexpected keyword ${token.value}`);
     }
@@ -178,6 +187,24 @@ export class Parser {
       type: "condition",
       columnName,
       right,
+    };
+  }
+  private beginStmt(): BeginStmtAST {
+    this.consumeKeywordOrError("BEGIN");
+    return {
+      type: "begin_stmt",
+    };
+  }
+  private commitStmt(): CommitStmtAST {
+    this.consumeKeywordOrError("COMMIT");
+    return {
+      type: "commit_stmt",
+    };
+  }
+  private rollbackStmt(): RollbackStmtAST {
+    this.consumeKeywordOrError("ROLLBACK");
+    return {
+      type: "rollback_stmt",
     };
   }
   private consume(tokenType: string): boolean {

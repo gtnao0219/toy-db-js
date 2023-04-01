@@ -2,6 +2,7 @@ import { Instance } from "../common/instance";
 import Table from "cli-table";
 import { createServer } from "http";
 import { exit } from "process";
+import { TRANSACTION_ID_HEADER_NAME } from "../common/common";
 
 const instance = new Instance();
 createServer((req, res) => {
@@ -14,26 +15,57 @@ createServer((req, res) => {
       body = body.trim();
       if (body === "exit" || body === "quit") {
         instance.shutdown();
-        res.end("Bye");
+        res.end(
+          JSON.stringify({
+            result: "Shutting down...",
+            transactionId: null,
+          })
+        );
         exit(0);
       }
-      const result = await instance.executeSQL(body);
-      if (result.length === 0) {
-        res.end("Empty set");
+      const rawTransactionId = req.headers[TRANSACTION_ID_HEADER_NAME];
+      const transactionId =
+        rawTransactionId == null
+          ? null
+          : parseInt(
+              Array.isArray(rawTransactionId)
+                ? rawTransactionId[0]
+                : rawTransactionId
+            );
+      if (transactionId != null && isNaN(transactionId)) {
+        throw new Error("invalid transaction id");
+      }
+      const result = await instance.executeSQL(body, transactionId);
+      const rows = result.rows;
+      if (rows.length === 0) {
+        res.end(
+          JSON.stringify({
+            transactionId: result.transactionId,
+            result: "Empty set",
+          })
+        );
         return;
       }
-      const schema = result[0].schema;
+      const schema = rows[0].schema;
       const table = new Table({
         head: schema.columns.map((column) => column.name),
       });
       table.push(
-        ...result.map((row) =>
-          row.values.map((value) => value.value.toString())
-        )
+        ...rows.map((row) => row.values.map((value) => value.value.toString()))
       );
-      res.end(table.toString());
-    } catch (e) {
-      res.end(e);
+      res.end(
+        JSON.stringify({
+          transactionId: result.transactionId,
+          result: table.toString(),
+        })
+      );
+    } catch (e: any) {
+      res.end(
+        JSON.stringify({
+          transactionId: null,
+          result: e.message || "",
+        })
+      );
     }
   });
 }).listen(8080);

@@ -3,7 +3,10 @@ export type AST =
   | InsertStmtAST
   | DeleteStmtAST
   | UpdateStmtAST
-  | SelectStmtAST;
+  | SelectStmtAST
+  | BeginStmtAST
+  | CommitStmtAST
+  | RollbackStmtAST;
 export type CreateTableStmtAST = {
   type: "create_table_stmt";
   tableName: string;
@@ -23,6 +26,15 @@ export type DeleteStmtAST = {
   type: "delete_stmt";
   tableName: string;
   condition?: ConditionAST;
+};
+export type BeginStmtAST = {
+  type: "begin_stmt";
+};
+export type CommitStmtAST = {
+  type: "commit_stmt";
+};
+export type RollbackStmtAST = {
+  type: "rollback_stmt";
 };
 // TODO: support complex condition
 export type ConditionAST = {

@@ -12,7 +12,10 @@ export type Keyword =
   | "WHERE"
   | "INTEGER"
   | "VARCHAR"
-  | "BOOLEAN";
+  | "BOOLEAN"
+  | "BEGIN"
+  | "COMMIT"
+  | "ROLLBACK";
 
 export type Literal = StringLiteral | NumberLiteral | BooleanLiteral;
 export type StringLiteral = {

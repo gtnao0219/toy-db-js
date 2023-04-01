@@ -1,6 +1,7 @@
 import { RID } from "../common/RID";
 import { TableHeap } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
+import { LockMode } from "./lock_manager";
 
 export enum TransactionState {
   GROWING,
@@ -12,7 +13,6 @@ export enum IsolationLevel {
   READ_UNCOMMITTED,
   READ_COMMITTED,
   REPEATABLE_READ,
-  SERIALIZABLE,
 }
 export enum WriteType {
   INSERT,
@@ -23,8 +23,8 @@ export class TransactionWriteRecord {
   constructor(
     private _writeType: WriteType,
     private _rid: RID,
-    private _tuple: Tuple | null,
-    private _table: TableHeap
+    private _oldTuple: Tuple | null,
+    private _tableHeap: TableHeap
   ) {}
   get writeType(): WriteType {
     return this._writeType;
@@ -32,34 +32,146 @@ export class TransactionWriteRecord {
   get rid(): RID {
     return this._rid;
   }
-  get tuple(): Tuple | null {
-    return this._tuple;
+  get oldTuple(): Tuple | null {
+    return this._oldTuple;
   }
-  get table(): TableHeap {
-    return this._table;
+  get tableHeap(): TableHeap {
+    return this._tableHeap;
   }
 }
 
+type TransactionLocks = {
+  sharedRowLock: [number, RID][];
+  exclusiveRowLock: [number, RID][];
+  sharedTableLock: number[];
+  exclusiveTableLock: number[];
+  intentionSharedTableLock: number[];
+  intentionExclusiveTableLock: number[];
+  sharedIntentionExclusiveTableLock: number[];
+};
+
 export class Transaction {
+  private _state: TransactionState = TransactionState.GROWING;
+  private _writeRecords: TransactionWriteRecord[] = [];
+  private _locks: TransactionLocks = {
+    sharedRowLock: [],
+    exclusiveRowLock: [],
+    sharedTableLock: [],
+    exclusiveTableLock: [],
+    intentionSharedTableLock: [],
+    intentionExclusiveTableLock: [],
+    sharedIntentionExclusiveTableLock: [],
+  };
   constructor(
     private _transactionId: number,
-    private _isolationLevel: IsolationLevel = IsolationLevel.REPEATABLE_READ,
-    private _writeSet: TransactionWriteRecord[] = []
+    private _isolationLevel: IsolationLevel = IsolationLevel.REPEATABLE_READ
   ) {}
   get transactionId(): number {
     return this._transactionId;
   }
-  get writeSet(): TransactionWriteRecord[] {
-    return this._writeSet;
+  get isolationLevel(): IsolationLevel {
+    return this._isolationLevel;
   }
-  addWriteSet(
+  get state(): TransactionState {
+    return this._state;
+  }
+  set state(state: TransactionState) {
+    this._state = state;
+  }
+  get writeRecords(): TransactionWriteRecord[] {
+    return this._writeRecords;
+  }
+  get locks(): TransactionLocks {
+    return this._locks;
+  }
+  addWriteRecord(
     writeType: WriteType,
     rid: RID,
     tuple: Tuple | null,
     table: TableHeap
   ): void {
-    this._writeSet.push(
+    this._writeRecords.push(
       new TransactionWriteRecord(writeType, rid, tuple, table)
+    );
+  }
+  addTableLock(tableOid: number, lockMode: LockMode): void {
+    switch (lockMode) {
+      case LockMode.SHARED:
+        this.locks.sharedTableLock.push(tableOid);
+        return;
+      case LockMode.EXCLUSIVE:
+        this.locks.exclusiveTableLock.push(tableOid);
+        return;
+      case LockMode.INTENTION_SHARED:
+        this.locks.intentionSharedTableLock.push(tableOid);
+        return;
+      case LockMode.INTENTION_EXCLUSIVE:
+        this.locks.intentionExclusiveTableLock.push(tableOid);
+        return;
+      case LockMode.SHARED_INTENTION_EXCLUSIVE:
+        this.locks.sharedIntentionExclusiveTableLock.push(tableOid);
+        return;
+    }
+  }
+  removeTableLock(tableOid: number, lockMode: LockMode): void {
+    switch (lockMode) {
+      case LockMode.SHARED:
+        this.locks.sharedTableLock = this.locks.sharedTableLock.filter(
+          (oid) => oid !== tableOid
+        );
+        return;
+      case LockMode.EXCLUSIVE:
+        this.locks.exclusiveTableLock = this.locks.exclusiveTableLock.filter(
+          (oid) => oid !== tableOid
+        );
+        return;
+      case LockMode.INTENTION_SHARED:
+        this.locks.intentionSharedTableLock =
+          this.locks.intentionSharedTableLock.filter((oid) => oid !== tableOid);
+        return;
+      case LockMode.INTENTION_EXCLUSIVE:
+        this.locks.intentionExclusiveTableLock =
+          this.locks.intentionExclusiveTableLock.filter(
+            (oid) => oid !== tableOid
+          );
+        return;
+      case LockMode.SHARED_INTENTION_EXCLUSIVE:
+        this.locks.sharedIntentionExclusiveTableLock =
+          this.locks.sharedIntentionExclusiveTableLock.filter(
+            (oid) => oid !== tableOid
+          );
+        return;
+    }
+  }
+  addRowLock(tableOid: number, rid: RID, lockMode: LockMode): void {
+    switch (lockMode) {
+      case LockMode.SHARED:
+        this.locks.sharedRowLock.push([tableOid, rid]);
+        return;
+      case LockMode.EXCLUSIVE:
+        this.locks.exclusiveRowLock.push([tableOid, rid]);
+        return;
+    }
+  }
+  removeRowLock(tableOid: number, rid: RID, lockMode: LockMode): void {
+    switch (lockMode) {
+      case LockMode.SHARED:
+        this.locks.sharedRowLock = this.locks.sharedRowLock.filter(
+          ([oid, r]) => oid !== tableOid || r !== rid
+        );
+        return;
+      case LockMode.EXCLUSIVE:
+        this.locks.exclusiveRowLock = this.locks.exclusiveRowLock.filter(
+          ([oid, r]) => oid !== tableOid || r !== rid
+        );
+        return;
+    }
+  }
+  isTableIntentionLocked(tableOid: number): boolean {
+    return (
+      this.locks.intentionSharedTableLock.includes(tableOid) ||
+      this.locks.intentionExclusiveTableLock.includes(tableOid) ||
+      this.locks.sharedIntentionExclusiveTableLock.includes(tableOid)
     );
   }
 }

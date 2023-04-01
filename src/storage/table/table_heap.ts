@@ -102,7 +102,7 @@ export class TableHeap {
         if (rid == null) {
           throw new Error("insert tuple failed");
         }
-        transaction.addWriteSet(WriteType.INSERT, rid, null, this);
+        transaction.addWriteRecord(WriteType.INSERT, rid, null, this);
         this._bufferPoolManager.unpinPage(newPage.pageId, true);
         return;
       }
@@ -116,7 +116,7 @@ export class TableHeap {
       }
       const rid = page.insertTuple(tuple, transaction);
       if (rid !== null) {
-        transaction.addWriteSet(WriteType.INSERT, rid, null, this);
+        transaction.addWriteRecord(WriteType.INSERT, rid, null, this);
         this._bufferPoolManager.unpinPage(pageId, true);
         return;
       }
@@ -135,7 +135,7 @@ export class TableHeap {
     }
     const oldTuple = page.getTuple(rid);
     page.markDelete(rid, transaction);
-    transaction.addWriteSet(WriteType.DELETE, rid, oldTuple, this);
+    transaction.addWriteRecord(WriteType.DELETE, rid, oldTuple, this);
   }
   async applyDelete(rid: RID, transaction: Transaction): Promise<void> {
     const page = await this._bufferPoolManager.fetchPage(
@@ -171,6 +171,6 @@ export class TableHeap {
     }
     const oldTuple = page.getTuple(rid);
     page.updateTuple(rid, tuple, transaction);
-    transaction.addWriteSet(WriteType.UPDATE, rid, oldTuple, this);
+    transaction.addWriteRecord(WriteType.UPDATE, rid, oldTuple, this);
   }
 }

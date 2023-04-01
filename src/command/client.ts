@@ -1,8 +1,10 @@
 import { createInterface } from "readline";
 import { request } from "http";
+import { Response, TRANSACTION_ID_HEADER_NAME } from "../common/common";
 
 const rl = createInterface(process.stdin);
 const prompt = "> ";
+let transactionId: number | null = null;
 process.stdout.write(prompt);
 rl.on("line", async (line) => {
   request(
@@ -12,6 +14,9 @@ rl.on("line", async (line) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(transactionId == null
+          ? {}
+          : { [TRANSACTION_ID_HEADER_NAME]: transactionId }),
       },
     },
     (res) => {
@@ -20,7 +25,9 @@ rl.on("line", async (line) => {
         body += chunk;
       });
       res.on("end", () => {
-        console.log(body);
+        const response: Response = JSON.parse(body);
+        console.log(response.result);
+        transactionId = response.transactionId;
         process.stdout.write(prompt);
       });
     }

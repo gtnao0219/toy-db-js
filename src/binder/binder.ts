@@ -42,6 +42,8 @@ export class Binder {
         return await this.bindUpdate(ast as UpdateStmtAST);
       case "select_stmt":
         return await this.bindSelect(ast as SelectStmtAST);
+      default:
+        throw new Error("Unexpected statement type");
     }
   }
   bindCreateTable(ast: CreateTableStmtAST): CreateTableStatement {

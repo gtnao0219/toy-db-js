@@ -4,6 +4,7 @@ import { StatementType } from "../binder/statement/statement";
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Catalog } from "../catalog/catalog";
 import { LockManager } from "../concurrency/lock_manager";
+import { Transaction } from "../concurrency/transaction";
 import { TransactionManager } from "../concurrency/transaction_manager";
 import { ExecutorContext } from "../execution/executor_context";
 import { ExecutorEngine } from "../execution/executor_engine";
@@ -11,6 +12,11 @@ import { planStatement } from "../execution/plan/planner";
 import { Parser } from "../parser/parser";
 import { DiskManager } from "../storage/disk/disk_manager";
 import { Tuple } from "../storage/table/tuple";
+
+export type SQLResult = {
+  transactionId: number | null;
+  rows: Tuple[];
+};
 
 export class Instance {
   private _diskManager: DiskManager;
@@ -40,13 +46,40 @@ export class Instance {
       this._catalog
     );
   }
-  async executeSQL(sql: string): Promise<Tuple[]> {
+  async executeSQL(
+    sql: string,
+    transactionId: number | null
+  ): Promise<SQLResult> {
     const parser = new Parser(sql);
     const ast = parser.parse();
+
+    const transaction: Transaction =
+      transactionId == null
+        ? this._transactionManager.begin()
+        : this._transactionManager.getTransaction(transactionId)!;
+    switch (ast.type) {
+      case "begin_stmt":
+        return {
+          transactionId: transaction.transactionId,
+          rows: [],
+        };
+      case "commit_stmt":
+        this._transactionManager.commit(transaction);
+        return {
+          transactionId: transaction.transactionId,
+          rows: [],
+        };
+      case "rollback_stmt":
+        this._transactionManager.abort(transaction);
+        return {
+          transactionId: transaction.transactionId,
+          rows: [],
+        };
+    }
+
     const binder = new Binder(this._catalog);
     const statement = await binder.bind(ast);
 
-    const transaction = this._transactionManager.begin();
     const executorContext = new ExecutorContext(
       transaction,
       this._bufferPoolManager,
@@ -65,13 +98,19 @@ export class Instance {
           statement.schema,
           transaction
         );
-        return [];
+        return {
+          transactionId: transaction.transactionId,
+          rows: [],
+        };
     }
 
     const plan = planStatement(statement);
-    const result = await this._executorEngine.execute(executorContext, plan);
+    const tuples = await this._executorEngine.execute(executorContext, plan);
     this._transactionManager.commit(transaction);
-    return result;
+    return {
+      transactionId: null,
+      rows: tuples,
+    };
   }
   async shutdown(): Promise<void> {
     await this._bufferPoolManager.flushAllPages();

@@ -1,48 +1,91 @@
-import { Tuple } from "../storage/table/tuple";
+import { RID } from "../common/RID";
 import { LockManager } from "./lock_manager";
-import { Transaction, WriteType } from "./transaction";
+import { Transaction, TransactionState, WriteType } from "./transaction";
 
 export class TransactionManager {
-  constructor(
-    private _lockManager: LockManager,
-    private _nextTransactionId: number = 0,
-    private _transactionMap: Map<number, Transaction> = new Map()
-  ) {}
+  // TODO: read from storage
+  private _nextTransactionId: number = 0;
+  private _transactionMap: Map<number, Transaction> = new Map();
+  constructor(private _lockManager: LockManager) {}
+  getTransaction(transactionId: number): Transaction | null {
+    const transaction = this._transactionMap.get(transactionId);
+    if (transaction === undefined) {
+      return null;
+    }
+    return transaction;
+  }
   begin(): Transaction {
     const transaction = new Transaction(this._nextTransactionId++);
     this._transactionMap.set(transaction.transactionId, transaction);
     return transaction;
   }
   commit(transaction: Transaction) {
-    transaction.writeSet.forEach((writeRecord) => {
+    transaction.state = TransactionState.COMMITTED;
+    transaction.writeRecords.forEach((writeRecord) => {
       switch (writeRecord.writeType) {
         case WriteType.DELETE:
-          writeRecord.table.applyDelete(writeRecord.rid, transaction);
+          writeRecord.tableHeap.applyDelete(writeRecord.rid, transaction);
           break;
       }
     });
     this.releaseLocks(transaction);
   }
   abort(transaction: Transaction) {
-    transaction.writeSet.forEach((writeRecord) => {
+    transaction.state = TransactionState.ABORTED;
+    transaction.writeRecords.forEach((writeRecord) => {
       switch (writeRecord.writeType) {
         case WriteType.INSERT:
-          writeRecord.table.applyDelete(writeRecord.rid, transaction);
+          writeRecord.tableHeap.applyDelete(writeRecord.rid, transaction);
           break;
         case WriteType.DELETE:
-          writeRecord.table.rollbackDelete(writeRecord.rid, transaction);
+          writeRecord.tableHeap.rollbackDelete(writeRecord.rid, transaction);
           break;
         case WriteType.UPDATE:
-          writeRecord.table.updateTuple(
+          if (writeRecord.oldTuple == null) {
+            throw new Error("old tuple is null");
+          }
+          writeRecord.tableHeap.updateTuple(
             writeRecord.rid,
-            writeRecord.tuple as Tuple,
+            writeRecord.oldTuple,
             transaction
           );
           break;
       }
     });
-
     this.releaseLocks(transaction);
   }
-  private releaseLocks(transaction: Transaction) {}
+  private releaseLocks(transaction: Transaction) {
+    // tables
+    const tableOids: number[] = [];
+    transaction.locks.sharedTableLock.forEach((oid) => {
+      tableOids.push(oid);
+    });
+    transaction.locks.exclusiveTableLock.forEach((oid) => {
+      tableOids.push(oid);
+    });
+    transaction.locks.intentionSharedTableLock.forEach((oid) => {
+      tableOids.push(oid);
+    });
+    transaction.locks.intentionExclusiveTableLock.forEach((oid) => {
+      tableOids.push(oid);
+    });
+    transaction.locks.sharedIntentionExclusiveTableLock.forEach((oid) => {
+      tableOids.push(oid);
+    });
+    // rows
+    const rowOidRids: [number, RID][] = [];
+    transaction.locks.sharedRowLock.forEach((oidRid) => {
+      rowOidRids.push(oidRid);
+    });
+    transaction.locks.exclusiveRowLock.forEach((oidRid) => {
+      rowOidRids.push(oidRid);
+    });
+
+    rowOidRids.forEach(([oid, rid]) => {
+      this._lockManager.unlockRow(transaction, oid, rid);
+    });
+    tableOids.forEach((oid) => {
+      this._lockManager.unlockTable(transaction, oid);
+    });
+  }
 }

@@ -74,6 +74,15 @@ export function tokenize(input: string): Token[] {
             value: { type: "boolean", value: false },
           });
           break;
+        case "BEGIN":
+          tokens.push({ type: "keyword", value: "BEGIN" });
+          break;
+        case "COMMIT":
+          tokens.push({ type: "keyword", value: "COMMIT" });
+          break;
+        case "ROLLBACK":
+          tokens.push({ type: "keyword", value: "ROLLBACK" });
+          break;
         default:
           tokens.push({ type: "identifier", value: str });
       }
