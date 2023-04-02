@@ -183,13 +183,32 @@ export class Binder {
         new BoundLiteralExpression(condition.right)
       );
     }
+    const sortKeys = [];
+    const orderBy = ast.orderBy;
+    if (orderBy != null) {
+      for (const sk of orderBy.sortKeys) {
+        const columnIndex = schema.columns.findIndex(
+          (c) => c.name === sk.columnName
+        );
+        if (columnIndex === -1) {
+          throw new Error(`Column ${sk.columnName} does not exist`);
+        }
+        sortKeys.push({
+          columnIndex,
+          direction: sk.direction,
+        });
+      }
+    }
+    const limit = ast.limit == null ? null : ast.limit.value;
     if (ast.isAsterisk) {
       return new SelectStatement(
         tableRef,
         schema.columns.map((_, i) => {
           return new BoundColumnRefExpression(tableRef, i);
         }),
-        predicate
+        predicate,
+        sortKeys,
+        limit
       );
     }
     const expressions = ast.columnNames.map((columnName) => {
@@ -201,6 +220,12 @@ export class Binder {
       }
       return new BoundColumnRefExpression(tableRef, columnIndex);
     });
-    return new SelectStatement(tableRef, expressions, predicate);
+    return new SelectStatement(
+      tableRef,
+      expressions,
+      predicate,
+      sortKeys,
+      limit
+    );
   }
 }

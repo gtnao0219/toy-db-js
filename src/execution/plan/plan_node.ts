@@ -5,6 +5,8 @@ export enum PlanType {
   SEQ_SCAN,
   PROJECTION,
   FILTER,
+  SORT,
+  LIMIT,
 }
 export abstract class PlanNode {
   constructor(protected _planType: PlanType) {}

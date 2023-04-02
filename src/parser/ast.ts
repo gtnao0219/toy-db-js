@@ -59,4 +59,19 @@ export type SelectStmtAST = {
   isAsterisk: boolean;
   columnNames: string[];
   condition?: ConditionAST;
+  orderBy?: OrderByAST;
+  limit?: LimitAST;
+};
+export type OrderByAST = {
+  type: "order_by";
+  sortKeys: SortKeyAST[];
+};
+export type SortKeyAST = {
+  type: "sort_key";
+  columnName: string;
+  direction: "ASC" | "DESC";
+};
+export type LimitAST = {
+  type: "limit";
+  value: number;
 };

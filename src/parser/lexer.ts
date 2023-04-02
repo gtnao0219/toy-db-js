@@ -53,6 +53,21 @@ export function tokenize(input: string): Token[] {
         case "WHERE":
           tokens.push({ type: "keyword", value: "WHERE" });
           break;
+        case "ORDER":
+          tokens.push({ type: "keyword", value: "ORDER" });
+          break;
+        case "BY":
+          tokens.push({ type: "keyword", value: "BY" });
+          break;
+        case "DESC":
+          tokens.push({ type: "keyword", value: "DESC" });
+          break;
+        case "ASC":
+          tokens.push({ type: "keyword", value: "ASC" });
+          break;
+        case "LIMIT":
+          tokens.push({ type: "keyword", value: "LIMIT" });
+          break;
         case "INTEGER":
           tokens.push({ type: "keyword", value: "INTEGER" });
           break;

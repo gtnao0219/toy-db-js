@@ -7,9 +7,11 @@ import { UpdateStatement } from "../../binder/statement/update_statement";
 import { DeletePlanNode } from "./delete_plan_node";
 import { FilterPlanNode } from "./filter_plan";
 import { InsertPlanNode } from "./insert_plan_node";
+import { LimitPlanNode } from "./limit_plan";
 import { PlanNode } from "./plan_node";
 import { ProjectionPlanNode } from "./projection_plan";
 import { SeqScanPlanNode } from "./seq_scan_plan_node";
+import { SortPlanNode } from "./sort_plan";
 import { UpdatePlanNode } from "./update_plan_node";
 
 export function planStatement(statement: Statement): PlanNode {
@@ -48,13 +50,22 @@ export function planUpdateStatement(
 }
 export function planSelectStatement(
   statement: SelectStatement
-): ProjectionPlanNode {
+): ProjectionPlanNode | LimitPlanNode | SortPlanNode {
   const tableRefPlan = planTableRef(statement.table);
   const filterPlan = new FilterPlanNode(statement.predicate, tableRefPlan);
   const projectionPlan = new ProjectionPlanNode(
     statement.selectList,
     filterPlan
   );
+  if (statement.sortKeys.length > 0) {
+    const sortPlan = new SortPlanNode(statement.sortKeys, projectionPlan);
+    if (statement.limit !== null) {
+      const limitPlan = new LimitPlanNode(statement.limit, sortPlan);
+      return limitPlan;
+    } else {
+      return sortPlan;
+    }
+  }
   return projectionPlan;
 }
 export function planTableRef(tableRef: BoundTableRef): PlanNode {

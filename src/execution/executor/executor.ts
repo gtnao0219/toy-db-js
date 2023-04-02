@@ -8,6 +8,8 @@ export enum ExecutorType {
   SEQ_SCAN,
   PROJECTION,
   FILTER,
+  SORT,
+  LIMIT,
 }
 export abstract class Executor {
   constructor(

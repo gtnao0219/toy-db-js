@@ -4,7 +4,10 @@ import {
   CommitStmtAST,
   ConditionAST,
   DeleteStmtAST,
+  LimitAST,
+  OrderByAST,
   RollbackStmtAST,
+  SortKeyAST,
   TableElementAST,
   UpdateStmtAST,
 } from "./ast";
@@ -171,12 +174,16 @@ export class Parser {
     if (this.consumeKeyword("WHERE")) {
       condition = this.condition();
     }
+    const orderBy = this.orderBy() ?? undefined;
+    const limit = this.limit() ?? undefined;
     return {
       type: "select_stmt",
       tableName,
       isAsterisk,
       columnNames,
       condition,
+      orderBy,
+      limit,
     };
   }
   private condition(): ConditionAST {
@@ -187,6 +194,47 @@ export class Parser {
       type: "condition",
       columnName,
       right,
+    };
+  }
+  private orderBy(): OrderByAST | null {
+    if (!(this.consumeKeyword("ORDER") && this.consumeKeyword("BY"))) {
+      return null;
+    }
+    const sortKeys = [];
+    sortKeys.push(this.sortKey());
+    while (this.consume("comma")) {
+      sortKeys.push(this.sortKey());
+    }
+    return {
+      type: "order_by",
+      sortKeys,
+    };
+  }
+  private sortKey(): SortKeyAST {
+    const columnName = this.consumeIdentifierOrError();
+    let direction: "ASC" | "DESC" = "ASC";
+    if (this.consumeKeyword("ASC")) {
+      direction = "ASC";
+    } else if (this.consumeKeyword("DESC")) {
+      direction = "DESC";
+    }
+    return {
+      type: "sort_key",
+      columnName,
+      direction,
+    };
+  }
+  private limit(): LimitAST | null {
+    if (!this.consumeKeyword("LIMIT")) {
+      return null;
+    }
+    const value = this.consumeLiteralOrError();
+    if (typeof value !== "number") {
+      throw new Error("Expected number");
+    }
+    return {
+      type: "limit",
+      value,
     };
   }
   private beginStmt(): BeginStmtAST {

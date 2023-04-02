@@ -1,5 +1,3 @@
-import { BufferPoolManager } from "../../buffer/buffer_pool_manager";
-import { Catalog } from "../../catalog/catalog";
 import { Column } from "../../catalog/column";
 import { Schema } from "../../catalog/schema";
 import { TupleWithRID } from "../../storage/table/table_heap";
