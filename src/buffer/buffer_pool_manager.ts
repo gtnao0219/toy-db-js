@@ -1,12 +1,13 @@
+import { Debuggable } from "../common/common";
 import { DiskManager } from "../storage/disk/disk_manager";
 import { Page, PageDeserializer, PageType } from "../storage/page/page";
 import { newEmptyPage } from "../storage/page/page_generator";
 import { LRUReplacer } from "./lru_replacer";
 import { Replacer } from "./replacer";
 
-const POOL_SIZE = 10;
+const POOL_SIZE = 32;
 
-export class BufferPoolManager {
+export class BufferPoolManager implements Debuggable {
   constructor(
     private _diskManager: DiskManager,
     private _replacer: Replacer = new LRUReplacer(),
@@ -78,6 +79,14 @@ export class BufferPoolManager {
         await this._diskManager.writePage(page);
       }
     }
+  }
+  debug(): object {
+    return {
+      replacer: this._replacer.debug(),
+      pages: this._pages.map((page) => (page == null ? null : page.pageId)),
+      // pageTable: Array.from(this._pageTable.entries()),
+      // freeFrameIds: this._freeFrameIds,
+    };
   }
   private getPage(frameId: number): Page {
     const page = this._pages[frameId];

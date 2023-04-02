@@ -27,6 +27,7 @@ const COLUMN_INFORMATION_SCHEMA_SCHEMA = new Schema([
   new Column("table_oid", Type.INTEGER),
   new Column("name", Type.VARCHAR),
   new Column("type", Type.INTEGER),
+  new Column("ordinary_position", Type.INTEGER),
 ]);
 
 export class Catalog {
@@ -57,20 +58,20 @@ export class Catalog {
       COLUMN_INFORMATION_SCHEMA_OID,
       COLUMN_INFORMATION_SCHEMA_SCHEMA
     );
-    this.insertHeaderPageEntry(
+    await this.insertHeaderPageEntry(
       TABLE_INFORMATION_SCHEMA_OID,
       tableInformationSchemaTableHeap.firstPageId
     );
-    this.insertHeaderPageEntry(
+    await this.insertHeaderPageEntry(
       COLUMN_INFORMATION_SCHEMA_OID,
       columnInformationSchemaTableHeap.firstPageId
     );
-    this.createTable(
+    await this.createTable(
       TABLE_INFORMATION_SCHEMA_NAME,
       TABLE_INFORMATION_SCHEMA_SCHEMA,
       transaction
     );
-    this.createTable(
+    await this.createTable(
       COLUMN_INFORMATION_SCHEMA_NAME,
       COLUMN_INFORMATION_SCHEMA_SCHEMA,
       transaction
@@ -87,7 +88,7 @@ export class Catalog {
       oid,
       schema
     );
-    this.insertHeaderPageEntry(oid, tableHeap.firstPageId);
+    await this.insertHeaderPageEntry(oid, tableHeap.firstPageId);
     const tableInfoHeap = await this.tableInformationSchemaTableHeap();
     await tableInfoHeap.insertTuple(
       new Tuple(TABLE_INFORMATION_SCHEMA_SCHEMA, [
@@ -97,12 +98,14 @@ export class Catalog {
       transaction
     );
     const columnInfoHeap = await this.columnInformationSchemaTableHeap();
-    for (const column of schema.columns) {
+    for (let i = 0; i < schema.columns.length; i++) {
+      const column = schema.columns[i];
       await columnInfoHeap.insertTuple(
         new Tuple(COLUMN_INFORMATION_SCHEMA_SCHEMA, [
           new IntegerValue(oid),
           new VarcharValue(column.name),
           new IntegerValue(column.type),
+          new IntegerValue(i),
         ]),
         transaction
       );
@@ -135,6 +138,10 @@ export class Catalog {
     const heap = await this.columnInformationSchemaTableHeap();
     const columns: Column[] = [];
     const tuples = await heap.scan();
+    // TODO: sort by execution
+    tuples.sort((a, b) => {
+      return a.tuple.values[3].value - b.tuple.values[3].value;
+    });
     tuples.forEach((tuple) => {
       if (tuple.tuple.values[0].value === tableOid) {
         columns.push(

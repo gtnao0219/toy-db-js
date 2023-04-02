@@ -24,9 +24,15 @@ export class InsertExecutor extends Executor {
     const tableHeap = await this._executorContext.catalog.getTableHeapByOid(
       this._planNode.table.tableOid
     );
-    await tableHeap.insertTuple(
+    const rid = await tableHeap.insertTuple(
       new Tuple(tableHeap.schema, this._planNode.values),
       this._executorContext.transaction
+    );
+    await this._executorContext.lockManager.lockRow(
+      this._executorContext.transaction,
+      LockMode.EXCLUSIVE,
+      this._planNode.table.tableOid,
+      rid
     );
     return null;
   }

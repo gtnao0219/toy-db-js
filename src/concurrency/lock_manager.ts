@@ -1,7 +1,8 @@
 import { RID } from "../common/RID";
+import { Debuggable } from "../common/common";
 import { IsolationLevel, Transaction, TransactionState } from "./transaction";
 
-export abstract class LockRequest {
+export abstract class LockRequest implements Debuggable {
   private _granted = false;
   constructor(
     protected _transaction: Transaction,
@@ -19,6 +20,7 @@ export abstract class LockRequest {
   set granted(granted: boolean) {
     this._granted = granted;
   }
+  abstract debug(): object;
 }
 export class TableLockRequest extends LockRequest {
   constructor(
@@ -27,6 +29,13 @@ export class TableLockRequest extends LockRequest {
     private _tableOid: number
   ) {
     super(_transaction, _lockMode);
+  }
+  debug(): object {
+    return {
+      transactionId: this._transaction.transactionId,
+      lockMode: this._lockMode,
+      tableOid: this._tableOid,
+    };
   }
 }
 export class RowLockRequest extends LockRequest {
@@ -38,18 +47,19 @@ export class RowLockRequest extends LockRequest {
   ) {
     super(_transaction, _lockMode);
   }
+  debug(): object {
+    return {
+      transactionId: this._transaction.transactionId,
+      lockMode: this._lockMode,
+      tableOid: this._tableOid,
+      rid: this._rid,
+    };
+  }
 }
 
-export abstract class LockRequestQueue {
-  private _cv = new Int32Array(new SharedArrayBuffer(4));
+export abstract class LockRequestQueue implements Debuggable {
   private _upgrading: boolean = false;
   protected _requests: Array<LockRequest> = [];
-  async wait(): Promise<void> {
-    await Atomics.waitAsync(this._cv, 0, 0).value;
-  }
-  notifyAll(): void {
-    Atomics.notify(this._cv, 0);
-  }
   get upgrading(): boolean {
     return this._upgrading;
   }
@@ -58,6 +68,12 @@ export abstract class LockRequestQueue {
   }
   get requests(): Array<LockRequest> {
     return this._requests;
+  }
+  debug(): object {
+    return {
+      upgrading: this._upgrading,
+      requests: this._requests.map((r) => r.debug()),
+    };
   }
 }
 export class TableLockRequestQueue extends LockRequestQueue {
@@ -81,9 +97,19 @@ export enum LockMode {
   SHARED_INTENTION_EXCLUSIVE,
 }
 
-export class LockManager {
+export class LockManager implements Debuggable {
+  private _cv = new Int32Array(new SharedArrayBuffer(4));
   private tableLockMap = new Map<number, TableLockRequestQueue>();
   private rowLockMap = new Map<number, Map<number, RowLockRequestQueue>>();
+  get _rowLockMap() {
+    return this.rowLockMap;
+  }
+  async wait(): Promise<void> {
+    await Atomics.waitAsync(this._cv, 0, 0).value;
+  }
+  notifyAll(): void {
+    Atomics.notify(this._cv, 0);
+  }
   async lockTable(
     transaction: Transaction,
     lockMode: LockMode,
@@ -117,38 +143,40 @@ export class LockManager {
       queue.requests.splice(i, 0, lockRequest);
       queue.upgrading = true;
       while (!canGrantLock(queue, lockRequest)) {
-        await queue.wait();
+        await this.wait();
         if (transaction.state === TransactionState.ABORTED) {
           queue.upgrading = false;
           queue.requests.splice(i, 1);
-          queue.notifyAll();
+          this.notifyAll();
         }
       }
       queue.upgrading = false;
       lockRequest.granted = true;
       transaction.addTableLock(tableOid, lockMode);
       if (lockMode !== LockMode.EXCLUSIVE) {
-        queue.notifyAll();
+        this.notifyAll();
       }
+      return;
     }
     const lockRequest = new TableLockRequest(transaction, lockMode, tableOid);
     queue.requests.push(lockRequest);
     while (!canGrantLock(queue, lockRequest)) {
-      await queue.wait();
+      await this.wait();
       if (transaction.state === TransactionState.ABORTED) {
         queue.upgrading = false;
         queue.requests.splice(queue.requests.length - 1, 1);
-        queue.notifyAll();
+        this.notifyAll();
       }
     }
     queue.upgrading = false;
     lockRequest.granted = true;
     transaction.addTableLock(tableOid, lockMode);
     if (lockMode !== LockMode.EXCLUSIVE) {
-      queue.notifyAll();
+      this.notifyAll();
     }
   }
   unlockTable(transaction: Transaction, tableOid: number) {
+    console.log("unlockTable", transaction.transactionId, tableOid);
     const queue = this.tableLockMap.get(tableOid);
     if (queue == null) {
       transaction.state = TransactionState.ABORTED;
@@ -156,12 +184,14 @@ export class LockManager {
     }
     transaction.locks.sharedRowLock.forEach(([oid, _]) => {
       if (oid === tableOid) {
+        console.log("error", "shared", transaction.locks.sharedRowLock);
         transaction.state = TransactionState.ABORTED;
         throw new Error("TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS");
       }
     });
     transaction.locks.exclusiveRowLock.forEach(([oid, _]) => {
       if (oid === tableOid) {
+        console.log("error", "exclusive", transaction.locks.exclusiveRowLock);
         transaction.state = TransactionState.ABORTED;
         throw new Error("TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS");
       }
@@ -172,8 +202,8 @@ export class LockManager {
         request.transaction.transactionId === transaction.transactionId &&
         request.granted
       ) {
-        queue.requests.splice(i);
-        queue.notifyAll();
+        queue.requests.splice(i, 1);
+        this.notifyAll();
         if (mustShrink(transaction, request.lockMode)) {
           transaction.state = TransactionState.SHRINKING;
         }
@@ -216,7 +246,7 @@ export class LockManager {
       }
       // TODO:
       queue.requests.splice(i, 1);
-      request.transaction.removeTableLock(tableOid, request.lockMode);
+      request.transaction.removeRowLock(tableOid, rid, request.lockMode);
       const lockRequest = new RowLockRequest(
         transaction,
         lockMode,
@@ -226,19 +256,20 @@ export class LockManager {
       queue.requests.splice(i, 0, lockRequest);
       queue.upgrading = true;
       while (!canGrantLock(queue, lockRequest)) {
-        await queue.wait();
+        await this.wait();
         if (transaction.state === TransactionState.ABORTED) {
           queue.upgrading = false;
           queue.requests.splice(i, 1);
-          queue.notifyAll();
+          this.notifyAll();
         }
       }
       queue.upgrading = false;
       lockRequest.granted = true;
-      transaction.addTableLock(tableOid, lockMode);
+      transaction.addRowLock(tableOid, rid, lockMode);
       if (lockMode !== LockMode.EXCLUSIVE) {
-        queue.notifyAll();
+        this.notifyAll();
       }
+      return;
     }
     const lockRequest = new RowLockRequest(
       transaction,
@@ -248,22 +279,23 @@ export class LockManager {
     );
     queue.requests.push(lockRequest);
     while (!canGrantLock(queue, lockRequest)) {
-      await queue.wait();
+      await this.wait();
       if (transaction.state === TransactionState.ABORTED) {
         queue.upgrading = false;
         queue.requests.splice(queue.requests.length - 1, 1);
-        queue.notifyAll();
+        this.notifyAll();
       }
     }
     queue.upgrading = false;
     lockRequest.granted = true;
-    transaction.addTableLock(tableOid, lockMode);
+    transaction.addRowLock(tableOid, rid, lockMode);
     if (lockMode !== LockMode.EXCLUSIVE) {
-      queue.notifyAll();
+      this.notifyAll();
     }
   }
   unlockRow(transaction: Transaction, tableOid: number, rid: RID) {
-    const slotIdMap = this.rowLockMap.get(tableOid);
+    console.log("unlock row", transaction.transactionId, rid);
+    const slotIdMap = this.rowLockMap.get(rid.pageId);
     if (slotIdMap == null) {
       transaction.state = TransactionState.ABORTED;
       throw new Error("ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD");
@@ -279,14 +311,41 @@ export class LockManager {
         request.transaction.transactionId === transaction.transactionId &&
         request.granted
       ) {
-        queue.requests.splice(i);
-        queue.notifyAll();
+        queue.requests.splice(i, 1);
+        this.notifyAll();
         if (mustShrink(transaction, request.lockMode)) {
           transaction.state = TransactionState.SHRINKING;
         }
-        request.transaction.removeTableLock(tableOid, request.lockMode);
+        request.transaction.removeRowLock(tableOid, rid, request.lockMode);
       }
     }
+  }
+  debug(): object {
+    return {
+      TableLockRequestQueue: Array.from(this.tableLockMap.entries()).map(
+        ([tableOid, queue]) => {
+          return {
+            tableOid,
+            queue: queue.debug(),
+          };
+        }
+      ),
+      RowLockRequestQueue: Array.from(this.rowLockMap.entries()).map(
+        ([pageId, slotIdMap]) => {
+          return {
+            pageId,
+            slotIdMap: Array.from(slotIdMap.entries()).map(
+              ([slotId, queue]) => {
+                return {
+                  slotId,
+                  queue: queue.debug(),
+                };
+              }
+            ),
+          };
+        }
+      ),
+    };
   }
   private findOrCreateTableLockRequestQueue(
     tableOid: number

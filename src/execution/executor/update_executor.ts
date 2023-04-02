@@ -34,6 +34,12 @@ export class UpdateExecutor extends Executor {
       for (const assignment of this._planNode.assignments) {
         newTuple.values[assignment.columnIndex] = assignment.value;
       }
+      await this._executorContext.lockManager.lockRow(
+        this._executorContext.transaction,
+        LockMode.EXCLUSIVE,
+        this._planNode.table.tableOid,
+        tuple.rid
+      );
       this.tableHeap.updateTuple(
         tuple.rid,
         newTuple,

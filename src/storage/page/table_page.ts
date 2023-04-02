@@ -83,6 +83,12 @@ export class TablePage extends Page {
   }
   insertTuple(tuple: Tuple, transaction: Transaction): RID | null {
     const size = tuple.serialize().byteLength;
+    if (
+      PAGE_SIZE - TABLE_PAGE_HEADER_SIZE - TABLE_PAGE_LINE_POINTERS_SIZE <
+      size
+    ) {
+      throw new Error("Tuple is too large");
+    }
     if (this.freeSpaceSize() < TABLE_PAGE_LINE_POINTERS_SIZE + size) {
       return null;
     }

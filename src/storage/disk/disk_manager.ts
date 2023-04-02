@@ -8,14 +8,15 @@ export class DiskManager {
   existsDataFile(): boolean {
     return existsSync(this._data_file_name);
   }
-  async createDataFile(): Promise<void> {
+  async createDataFile(): Promise<boolean> {
     const exists = this.existsDataFile();
     if (exists) {
-      return;
+      return false;
     }
     const fd = await fsp.open(this._data_file_name, "w");
     await fd.write(new Uint8Array(new ArrayBuffer(0)), 0, 0);
     await fd.close();
+    return true;
   }
   async readPage(
     pageId: number,
@@ -41,7 +42,7 @@ export class DiskManager {
   async allocatePageId(): Promise<number> {
     const pageId = await this.pageCount();
     const fd = await fsp.open(this._data_file_name, "r+");
-    fd.write(
+    await fd.write(
       new Uint8Array(new ArrayBuffer(PAGE_SIZE)),
       0,
       PAGE_SIZE,

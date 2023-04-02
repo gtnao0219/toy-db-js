@@ -1,4 +1,5 @@
 import { RID } from "../common/RID";
+import { Debuggable } from "../common/common";
 import { TableHeap } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
 import { LockMode } from "./lock_manager";
@@ -19,7 +20,7 @@ export enum WriteType {
   DELETE,
   UPDATE,
 }
-export class TransactionWriteRecord {
+export class TransactionWriteRecord implements Debuggable {
   constructor(
     private _writeType: WriteType,
     private _rid: RID,
@@ -38,6 +39,13 @@ export class TransactionWriteRecord {
   get tableHeap(): TableHeap {
     return this._tableHeap;
   }
+  debug(): object {
+    return {
+      writeType: this._writeType,
+      rid: this._rid,
+      oldTuple: this._oldTuple,
+    };
+  }
 }
 
 type TransactionLocks = {
@@ -50,7 +58,7 @@ type TransactionLocks = {
   sharedIntentionExclusiveTableLock: number[];
 };
 
-export class Transaction {
+export class Transaction implements Debuggable {
   private _state: TransactionState = TransactionState.GROWING;
   private _writeRecords: TransactionWriteRecord[] = [];
   private _locks: TransactionLocks = {
@@ -95,25 +103,42 @@ export class Transaction {
     );
   }
   addTableLock(tableOid: number, lockMode: LockMode): void {
+    console.log("add table lock", tableOid, lockMode);
     switch (lockMode) {
       case LockMode.SHARED:
+        if (this.locks.sharedTableLock.includes(tableOid)) {
+          return;
+        }
         this.locks.sharedTableLock.push(tableOid);
         return;
       case LockMode.EXCLUSIVE:
+        if (this.locks.exclusiveTableLock.includes(tableOid)) {
+          return;
+        }
         this.locks.exclusiveTableLock.push(tableOid);
         return;
       case LockMode.INTENTION_SHARED:
+        if (this.locks.intentionSharedTableLock.includes(tableOid)) {
+          return;
+        }
         this.locks.intentionSharedTableLock.push(tableOid);
         return;
       case LockMode.INTENTION_EXCLUSIVE:
+        if (this.locks.intentionExclusiveTableLock.includes(tableOid)) {
+          return;
+        }
         this.locks.intentionExclusiveTableLock.push(tableOid);
         return;
       case LockMode.SHARED_INTENTION_EXCLUSIVE:
+        if (this.locks.sharedIntentionExclusiveTableLock.includes(tableOid)) {
+          return;
+        }
         this.locks.sharedIntentionExclusiveTableLock.push(tableOid);
         return;
     }
   }
   removeTableLock(tableOid: number, lockMode: LockMode): void {
+    console.log("remove table lock", tableOid, lockMode);
     switch (lockMode) {
       case LockMode.SHARED:
         this.locks.sharedTableLock = this.locks.sharedTableLock.filter(
@@ -144,25 +169,53 @@ export class Transaction {
     }
   }
   addRowLock(tableOid: number, rid: RID, lockMode: LockMode): void {
+    console.log("add row lock", tableOid, rid, lockMode);
     switch (lockMode) {
       case LockMode.SHARED:
+        if (
+          this.locks.sharedRowLock.find(
+            (lock) =>
+              lock[0] === tableOid &&
+              lock[1].pageId === rid.pageId &&
+              lock[1].slotId === rid.slotId
+          )
+        ) {
+          return;
+        }
         this.locks.sharedRowLock.push([tableOid, rid]);
         return;
       case LockMode.EXCLUSIVE:
+        if (
+          this.locks.exclusiveRowLock.find(
+            (lock) =>
+              lock[0] === tableOid &&
+              lock[1].pageId === rid.pageId &&
+              lock[1].slotId === rid.slotId
+          )
+        ) {
+          return;
+        }
         this.locks.exclusiveRowLock.push([tableOid, rid]);
         return;
     }
   }
   removeRowLock(tableOid: number, rid: RID, lockMode: LockMode): void {
+    console.log("remove row lock", tableOid, rid, lockMode);
     switch (lockMode) {
       case LockMode.SHARED:
         this.locks.sharedRowLock = this.locks.sharedRowLock.filter(
-          ([oid, r]) => oid !== tableOid || r !== rid
+          ([oid, r]) =>
+            oid !== tableOid ||
+            r.pageId !== rid.pageId ||
+            r.slotId !== rid.slotId
         );
         return;
       case LockMode.EXCLUSIVE:
         this.locks.exclusiveRowLock = this.locks.exclusiveRowLock.filter(
-          ([oid, r]) => oid !== tableOid || r !== rid
+          ([oid, r]) =>
+            oid !== tableOid ||
+            r.pageId !== rid.pageId ||
+            r.slotId !== rid.slotId
         );
         return;
     }
@@ -173,5 +226,14 @@ export class Transaction {
       this.locks.intentionExclusiveTableLock.includes(tableOid) ||
       this.locks.sharedIntentionExclusiveTableLock.includes(tableOid)
     );
+  }
+  debug(): object {
+    return {
+      transactionId: this.transactionId,
+      isolationLevel: this.isolationLevel,
+      state: this.state,
+      writeRecords: this.writeRecords.map((wr) => wr.debug()),
+      locks: this.locks,
+    };
   }
 }

@@ -6,6 +6,12 @@ module.exports = {
   entry: {
     server: path.resolve(__dirname, "src", "command", "server.ts"),
     client: path.resolve(__dirname, "src", "command", "client.ts"),
+    generateSampleTables: path.resolve(
+      __dirname,
+      "src",
+      "command",
+      "generateSampleTables.ts"
+    ),
   },
   output: {
     filename: "[name].js",

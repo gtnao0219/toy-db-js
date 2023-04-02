@@ -30,6 +30,12 @@ export class DeleteExecutor extends Executor {
     }
     let tuple: TupleWithRID | null = null;
     while ((tuple = await this._child.next()) !== null) {
+      await this._executorContext.lockManager.lockRow(
+        this._executorContext.transaction,
+        LockMode.EXCLUSIVE,
+        this._planNode.table.tableOid,
+        tuple.rid
+      );
       await this.tableHeap.markDelete(
         tuple.rid,
         this._executorContext.transaction

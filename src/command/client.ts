@@ -26,6 +26,7 @@ rl.on("line", async (line) => {
       });
       res.on("end", () => {
         const response: Response = JSON.parse(body);
+        console.log("transactionId", response.transactionId);
         console.log(response.result);
         transactionId = response.transactionId;
         process.stdout.write(prompt);

@@ -1,4 +1,5 @@
 import { LockMode } from "../../concurrency/lock_manager";
+import { IsolationLevel } from "../../concurrency/transaction";
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
 import { SeqScanPlanNode } from "../plan/seq_scan_plan_node";
@@ -28,8 +29,38 @@ export class SeqScanExecutor extends Executor {
   }
   async next(): Promise<TupleWithRID | null> {
     if (this._cursor >= this._tuples.length) {
+      if (
+        this._executorContext.transaction.isolationLevel ===
+        IsolationLevel.READ_COMMITTED
+      ) {
+        this._executorContext.transaction.locks.sharedRowLock.forEach(
+          ([oid, rid]) => {
+            this._executorContext.lockManager.unlockRow(
+              this._executorContext.transaction,
+              oid,
+              rid
+            );
+          }
+        );
+        this._executorContext.lockManager.unlockTable(
+          this._executorContext.transaction,
+          this._planNode.table.tableOid
+        );
+      }
       return null;
     }
-    return this._tuples[this._cursor++];
+    const tuple = this._tuples[this._cursor++];
+    if (
+      this._executorContext.transaction.isolationLevel !==
+      IsolationLevel.READ_UNCOMMITTED
+    ) {
+      await this._executorContext.lockManager.lockRow(
+        this._executorContext.transaction,
+        LockMode.SHARED,
+        this._planNode.table.tableOid,
+        tuple.rid
+      );
+    }
+    return tuple;
   }
 }

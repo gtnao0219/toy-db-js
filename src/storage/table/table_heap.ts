@@ -78,7 +78,7 @@ export class TableHeap {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  async insertTuple(tuple: Tuple, transaction: Transaction): Promise<void> {
+  async insertTuple(tuple: Tuple, transaction: Transaction): Promise<RID> {
     let prevPageId = INVALID_PAGE_ID;
     let pageId = this._firstPageId;
     while (true) {
@@ -104,7 +104,7 @@ export class TableHeap {
         }
         transaction.addWriteRecord(WriteType.INSERT, rid, null, this);
         this._bufferPoolManager.unpinPage(newPage.pageId, true);
-        return;
+        return rid;
       }
 
       const page = await this._bufferPoolManager.fetchPage(
@@ -118,7 +118,7 @@ export class TableHeap {
       if (rid !== null) {
         transaction.addWriteRecord(WriteType.INSERT, rid, null, this);
         this._bufferPoolManager.unpinPage(pageId, true);
-        return;
+        return rid;
       }
       prevPageId = pageId;
       pageId = page.nextPageId;
