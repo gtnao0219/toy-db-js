@@ -1,4 +1,5 @@
 import {
+  Type,
   VARIABLE_VALUE_INLINE_OFFSET_SIZE,
   VARIABLE_VALUE_INLINE_SIZE,
 } from "./type";
@@ -6,6 +7,7 @@ import {
 export abstract class Value {
   abstract get value(): any;
   abstract serialize(): ArrayBuffer;
+  abstract castAs(type: Type): Value;
 }
 export abstract class InlinedValue extends Value {}
 export abstract class VariableValue extends Value {

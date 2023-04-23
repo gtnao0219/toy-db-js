@@ -1,18 +1,11 @@
+import { BooleanValue } from "./boolean_value";
 import { Type } from "./type";
-import { InlinedValue } from "./value";
+import { InlinedValue, Value } from "./value";
+import { VarcharValue } from "./varchar_value";
 
 export class IntegerValue extends InlinedValue {
-  private _type = Type.INTEGER;
   constructor(private _value: number) {
     super();
-  }
-  static of(str: string): IntegerValue {
-    const number = parseInt(str);
-    if (isNaN(number)) {
-      throw new Error("Invalid integer value");
-    }
-    // TODO: check if number is in range of int32
-    return new IntegerValue(number);
   }
   static deserialize(buffer: ArrayBuffer, offset: number): IntegerValue {
     const dataView = new DataView(buffer);
@@ -27,5 +20,15 @@ export class IntegerValue extends InlinedValue {
     const dataView = new DataView(buffer);
     dataView.setInt32(0, this._value);
     return buffer;
+  }
+  castAs(type: Type): Value {
+    switch (type) {
+      case Type.BOOLEAN:
+        return new BooleanValue(this._value !== 0);
+      case Type.INTEGER:
+        return new IntegerValue(this._value);
+      case Type.VARCHAR:
+        return new VarcharValue(this._value.toString());
+    }
   }
 }
