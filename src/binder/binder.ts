@@ -69,7 +69,7 @@ export class Binder {
   async bindInsert(ast: InsertStmtAST): Promise<InsertStatement> {
     const tableOid = await this._catalog.getOidByTableName(ast.tableName);
     const schema = await this._catalog.getSchemaByOid(tableOid);
-    const tableRef = new BoundBaseTableRef(tableOid, schema);
+    const tableRef = new BoundBaseTableRef(ast.tableName, tableOid, "", schema);
     if (ast.values.length !== schema.columns.length) {
       throw new Error("Number of values does not match number of columns");
     }
@@ -91,7 +91,7 @@ export class Binder {
   async bindDelete(ast: DeleteStmtAST): Promise<DeleteStatement> {
     const tableOid = await this._catalog.getOidByTableName(ast.tableName);
     const schema = await this._catalog.getSchemaByOid(tableOid);
-    const tableRef = new BoundBaseTableRef(tableOid, schema);
+    const tableRef = new BoundBaseTableRef(ast.tableName, tableOid, "", schema);
     let predicate: BoundExpression = new BoundLiteralExpression(true);
     const condition = ast.condition;
     if (condition != null) {
@@ -112,7 +112,7 @@ export class Binder {
   async bindUpdate(ast: UpdateStmtAST): Promise<UpdateStatement> {
     const tableOid = await this._catalog.getOidByTableName(ast.tableName);
     const schema = await this._catalog.getSchemaByOid(tableOid);
-    const tableRef = new BoundBaseTableRef(tableOid, schema);
+    const tableRef = new BoundBaseTableRef(ast.tableName, tableOid, "", schema);
     const assignments = ast.assignments.map((assignment) => {
       const columnIndex = schema.columns.findIndex(
         (column) => column.name === assignment.columnName
@@ -167,7 +167,7 @@ export class Binder {
   async bindSelect(ast: SelectStmtAST): Promise<SelectStatement> {
     const tableOid = await this._catalog.getOidByTableName(ast.tableName);
     const schema = await this._catalog.getSchemaByOid(tableOid);
-    const tableRef = new BoundBaseTableRef(tableOid, schema);
+    const tableRef = new BoundBaseTableRef(ast.tableName, tableOid, "", schema);
     let predicate: BoundExpression = new BoundLiteralExpression(true);
     const condition = ast.condition;
     if (condition != null) {
