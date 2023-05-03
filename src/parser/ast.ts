@@ -55,10 +55,9 @@ export type RollbackStatementAST = {
 };
 export type SelectStatementAST = {
   type: "select_statement";
-  // TODO: join
-  tableName: string;
   isAsterisk: boolean;
   selectElements: SelectElementAST[];
+  tableReference: TableReferenceAST;
   condition?: ExpressionAST;
   orderBy?: OrderByAST;
   limit?: LimitAST;
@@ -67,12 +66,35 @@ export type SelectElementAST = {
   expression: ExpressionAST;
   alias?: string;
 };
+export type TableReferenceAST =
+  | SimpleTableReferenceAST
+  | JoinTableReferenceAST
+  | SubqueryTableReferenceAST;
+export type SimpleTableReferenceAST = {
+  type: "simple_table_reference";
+  tableName: string;
+  alias?: string;
+};
+export type JoinType = "INNER" | "LEFT" | "RIGHT";
+export type JoinTableReferenceAST = {
+  type: "join_table_reference";
+  joinType: JoinType;
+  left: TableReferenceAST;
+  right: TableReferenceAST;
+  condition: ExpressionAST;
+};
+export type SubqueryTableReferenceAST = {
+  type: "subquery_table_reference";
+  query: SelectStatementAST;
+  name: string;
+};
 export type OrderByAST = {
   sortKeys: SortKeyAST[];
 };
+export type Direction = "ASC" | "DESC";
 export type SortKeyAST = {
   columnName: string;
-  direction: "ASC" | "DESC";
+  direction: Direction;
 };
 export type LimitAST = {
   value: number;

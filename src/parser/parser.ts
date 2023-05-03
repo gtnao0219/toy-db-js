@@ -7,14 +7,18 @@ import {
   DropTableStatementAST,
   ExpressionAST,
   InsertStatementAST,
+  JoinTableReferenceAST,
+  JoinType,
   LimitAST,
   OrderByAST,
   RollbackStatementAST,
   SelectElementAST,
   SelectStatementAST,
+  SimpleTableReferenceAST,
   SortKeyAST,
   StatementAST,
   TableElementAST,
+  TableReferenceAST,
   UpdateStatementAST,
 } from "./ast";
 import { tokenize } from "./lexer";
@@ -172,7 +176,7 @@ export class Parser {
       }
     }
     this.consumeKeywordOrError("FROM");
-    const tableName = this.consumeIdentifierOrError();
+    const tableReference = this.tableReference();
     let condition: ExpressionAST | undefined = undefined;
     if (this.consumeKeyword("WHERE")) {
       condition = this.expression();
@@ -181,9 +185,9 @@ export class Parser {
     const limit = this.limit() ?? undefined;
     return {
       type: "select_statement",
-      tableName,
       isAsterisk,
       selectElements,
+      tableReference,
       ...(condition != null ? { condition } : {}),
       ...(orderBy != null ? { orderBy } : {}),
       ...(limit != null ? { limit } : {}),
@@ -200,6 +204,66 @@ export class Parser {
     }
     return {
       expression,
+    };
+  }
+  private tableReference(): TableReferenceAST {
+    let left: TableReferenceAST;
+
+    if (this.consume("left_paren")) {
+      const query = this.selectStatement();
+      this.consumeOrError("right_paren");
+      this.consumeKeywordOrError("AS");
+      const name = this.consumeIdentifierOrError();
+      left = {
+        type: "subquery_table_reference",
+        query,
+        name,
+      };
+    } else {
+      const tableName = this.consumeIdentifierOrError();
+      left = {
+        type: "simple_table_reference",
+        tableName,
+      };
+      if (this.consumeKeyword("AS")) {
+        left.alias = this.consumeIdentifierOrError();
+      }
+    }
+
+    while (
+      this.matchKeyword("INNER") ||
+      this.matchKeyword("LEFT") ||
+      this.matchKeyword("RIGHT")
+    ) {
+      left = this.joinTableReference(left);
+    }
+
+    return left;
+  }
+  private joinTableReference(left: TableReferenceAST): JoinTableReferenceAST {
+    let joinType: JoinType;
+
+    if (this.consumeKeyword("INNER")) {
+      joinType = "INNER";
+    } else if (this.consumeKeyword("LEFT")) {
+      joinType = "LEFT";
+    } else if (this.consumeKeyword("RIGHT")) {
+      joinType = "RIGHT";
+    } else {
+      throw new Error("Unexpected join type");
+    }
+
+    this.consumeKeywordOrError("JOIN");
+    const right = this.tableReference();
+    this.consumeKeywordOrError("ON");
+    const condition = this.expression();
+
+    return {
+      type: "join_table_reference",
+      joinType,
+      left,
+      right,
+      condition,
     };
   }
 

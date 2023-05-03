@@ -11,7 +11,10 @@ describe("Parser", () => {
           type: "select_statement",
           isAsterisk: true,
           selectElements: [],
-          tableName: "users",
+          tableReference: {
+            type: "simple_table_reference",
+            tableName: "users",
+          },
         });
       });
       it("should parse a select statement with select elements", () => {
@@ -25,7 +28,10 @@ describe("Parser", () => {
             { expression: { type: "path", path: ["id"] } },
             { expression: { type: "path", path: ["name"] } },
           ],
-          tableName: "users",
+          tableReference: {
+            type: "simple_table_reference",
+            tableName: "users",
+          },
         });
       });
       it("should parse a select statement with various select elements", () => {
@@ -47,7 +53,88 @@ describe("Parser", () => {
               },
             },
           ],
-          tableName: "users",
+          tableReference: {
+            type: "simple_table_reference",
+            tableName: "users",
+          },
+        });
+      });
+      it("should parse a select statement with joined table", () => {
+        const sql =
+          "SELECT * FROM users INNER JOIN posts ON users.id = posts.user_id LEFT JOIN comments ON posts.id = comments.post_id";
+        const parser = new Parser(sql);
+        const ast = parser.parse();
+        expect(ast).toEqual({
+          type: "select_statement",
+          isAsterisk: true,
+          selectElements: [],
+          tableReference: {
+            type: "join_table_reference",
+            joinType: "LEFT",
+            left: {
+              type: "join_table_reference",
+              joinType: "INNER",
+              left: {
+                type: "simple_table_reference",
+                tableName: "users",
+              },
+              right: {
+                type: "simple_table_reference",
+                tableName: "posts",
+              },
+              condition: {
+                type: "binary_operation",
+                operator: "=",
+                left: {
+                  type: "path",
+                  path: ["users", "id"],
+                },
+                right: {
+                  type: "path",
+                  path: ["posts", "user_id"],
+                },
+              },
+            },
+            right: {
+              type: "simple_table_reference",
+              tableName: "comments",
+            },
+            condition: {
+              type: "binary_operation",
+              operator: "=",
+              left: {
+                type: "path",
+                path: ["posts", "id"],
+              },
+              right: {
+                type: "path",
+                path: ["comments", "post_id"],
+              },
+            },
+          },
+        });
+      });
+      it("should parse a select statement with subquery", () => {
+        const sql = "SELECT * FROM (SELECT * FROM posts) AS t1";
+        const parser = new Parser(sql);
+        const ast = parser.parse();
+        expect(ast).toEqual({
+          type: "select_statement",
+          isAsterisk: true,
+          selectElements: [],
+          tableReference: {
+            type: "subquery_table_reference",
+            query: {
+              type: "select_statement",
+              isAsterisk: true,
+              selectElements: [],
+              tableReference: {
+                type: "simple_table_reference",
+                tableName: "posts",
+              },
+            },
+            name: "t1",
+          },
         });
       });
       it("should parse a select statement with where clause", () => {
@@ -58,7 +145,10 @@ describe("Parser", () => {
           type: "select_statement",
           isAsterisk: true,
           selectElements: [],
-          tableName: "users",
+          tableReference: {
+            type: "simple_table_reference",
+            tableName: "users",
+          },
           condition: {
             type: "binary_operation",
             operator: "=",
@@ -75,7 +165,10 @@ describe("Parser", () => {
           type: "select_statement",
           isAsterisk: true,
           selectElements: [],
-          tableName: "users",
+          tableReference: {
+            type: "simple_table_reference",
+            tableName: "users",
+          },
           orderBy: {
             sortKeys: [
               {
@@ -98,7 +191,10 @@ describe("Parser", () => {
           type: "select_statement",
           isAsterisk: true,
           selectElements: [],
-          tableName: "users",
+          tableReference: {
+            type: "simple_table_reference",
+            tableName: "users",
+          },
           limit: {
             value: 10,
           },
