@@ -38,7 +38,10 @@ export function tokenize(input: string): Token[] {
           });
           break;
         case "NULL":
-          tokens.push({ type: "literal", value: { type: "null" } });
+          tokens.push({
+            type: "literal",
+            value: { type: "null", value: null },
+          });
           break;
         default:
           tokens.push({ type: "identifier", value: str });
@@ -164,7 +167,7 @@ export function tokenize(input: string): Token[] {
     }
     throw new Error(`Unexpected character: ${char}`);
   }
-  return tokens;
+  return tokens.concat({ type: "eof" });
 }
 
 function is_whitespace(char: string): boolean {

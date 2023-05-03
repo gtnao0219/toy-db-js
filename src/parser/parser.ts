@@ -1,59 +1,61 @@
 import {
   AssignmentAST,
-  BeginStmtAST,
-  CommitStmtAST,
-  ConditionAST,
-  DeleteStmtAST,
+  BeginStatementAST,
+  CommitStatementAST,
+  CreateTableStatementAST,
+  DeleteStatementAST,
+  DropTableStatementAST,
+  ExpressionAST,
+  InsertStatementAST,
   LimitAST,
   OrderByAST,
-  RollbackStmtAST,
+  RollbackStatementAST,
+  SelectStatementAST,
   SortKeyAST,
+  StatementAST,
   TableElementAST,
-  UpdateStmtAST,
+  UpdateStatementAST,
 } from "./ast";
-import { InsertStmtAST } from "./ast";
-import { SelectStmtAST } from "./ast";
-import { CreateTableStmtAST } from "./ast";
-import { AST } from "./ast";
 import { tokenize } from "./lexer";
 import { Keyword } from "./token";
 import { Token } from "./token";
 
 export class Parser {
   private tokens: Token[];
-  constructor(input: string, private position: number = 0) {
+  private position: number = 0;
+  constructor(input: string) {
     this.tokens = tokenize(input);
   }
-  parse(): AST {
-    return this.stmt();
+  parse(): StatementAST {
+    return this.statement();
   }
-  private stmt(): AST {
+  private statement(): StatementAST {
     const token = this.tokens[this.position];
     if (token.type !== "keyword") {
       throw new Error(`Expected keyword but got ${token.type}`);
     }
-    switch (token.value) {
-      case "CREATE":
-        return this.createTableStmt();
-      case "INSERT":
-        return this.insertStmt();
-      case "DELETE":
-        return this.deleteStmt();
-      case "UPDATE":
-        return this.updateStmt();
-      case "SELECT":
-        return this.selectStmt();
-      case "BEGIN":
-        return this.beginStmt();
-      case "COMMIT":
-        return this.commitStmt();
-      case "ROLLBACK":
-        return this.rollbackStmt();
-      default:
-        throw new Error(`Unexpected keyword ${token.value}`);
+    if (this.matchKeyword("CREATE")) {
+      return this.createTableStatement();
+    } else if (this.matchKeyword("DROP")) {
+      return this.dropTableStatement();
+    } else if (this.matchKeyword("INSERT")) {
+      return this.insertStatement();
+    } else if (this.matchKeyword("UPDATE")) {
+      return this.updateStatement();
+    } else if (this.matchKeyword("DELETE")) {
+      return this.deleteStatement();
+    } else if (this.matchKeyword("SELECT")) {
+      return this.selectStatement();
+    } else if (this.matchKeyword("BEGIN")) {
+      return this.beginStatement();
+    } else if (this.matchKeyword("COMMIT")) {
+      return this.commitStatement();
+    } else if (this.matchKeyword("ROLLBACK")) {
+      return this.rollbackStatement();
     }
+    throw new Error(`Unexpected keyword ${token.value}`);
   }
-  private createTableStmt(): CreateTableStmtAST {
+  private createTableStatement(): CreateTableStatementAST {
     this.consumeKeywordOrError("CREATE");
     this.consumeKeywordOrError("TABLE");
     const tableName = this.consumeIdentifierOrError();
@@ -65,7 +67,7 @@ export class Parser {
     }
     this.consumeOrError("right_paren");
     return {
-      type: "create_table_stmt",
+      type: "create_table_statement",
       tableName,
       tableElements,
     };
@@ -75,6 +77,8 @@ export class Parser {
     let columnType: string;
     if (this.consumeKeyword("INTEGER")) {
       columnType = "INTEGER";
+    } else if (this.consumeKeyword("FLOAT")) {
+      columnType = "FLOAT";
     } else if (this.consumeKeyword("VARCHAR")) {
       columnType = "VARCHAR";
     } else if (this.consumeKeyword("BOOLEAN")) {
@@ -88,77 +92,77 @@ export class Parser {
       columnType: columnType,
     };
   }
-  private insertStmt(): InsertStmtAST {
+  private dropTableStatement(): DropTableStatementAST {
+    this.consumeKeywordOrError("DROP");
+    this.consumeKeywordOrError("TABLE");
+    const tableName = this.consumeIdentifierOrError();
+    return {
+      type: "drop_table_statement",
+      tableName,
+    };
+  }
+  private insertStatement(): InsertStatementAST {
     this.consumeKeywordOrError("INSERT");
     this.consumeKeywordOrError("INTO");
     const tableName = this.consumeIdentifierOrError();
     this.consumeKeywordOrError("VALUES");
     this.consumeOrError("left_paren");
     const values = [];
-    values.push(this.consumeLiteralOrError());
+    values.push(this.expression());
     while (this.consume("comma")) {
-      values.push(this.consumeLiteralOrError());
+      values.push(this.expression());
     }
-    this.consumeOrError("right_paren");
     return {
-      type: "insert_stmt",
+      type: "insert_statement",
       tableName,
       values,
     };
   }
-  private deleteStmt(): DeleteStmtAST {
-    this.consumeKeywordOrError("DELETE");
-    this.consumeKeywordOrError("FROM");
-    const tableName = this.consumeIdentifierOrError();
-    let condition: ConditionAST | undefined = undefined;
-    if (this.consumeKeyword("WHERE")) {
-      condition = this.condition();
-    }
-    return {
-      type: "delete_stmt",
-      tableName,
-      condition,
-    };
-  }
-  private updateStmt(): UpdateStmtAST {
+  private updateStatement(): UpdateStatementAST {
     this.consumeKeywordOrError("UPDATE");
     const tableName = this.consumeIdentifierOrError();
     this.consumeKeywordOrError("SET");
-    const assignments = this.assignments();
-    let condition: ConditionAST | undefined = undefined;
+    const assignments = [];
+    assignments.push(this.assignment());
+    while (this.consume("comma")) {
+      assignments.push(this.assignment());
+    }
+    let condition: ExpressionAST | undefined = undefined;
     if (this.consumeKeyword("WHERE")) {
-      condition = this.condition();
+      condition = this.expression();
     }
     return {
-      type: "update_stmt",
+      type: "update_statement",
       tableName,
       assignments,
       condition,
     };
   }
-  private assignments(): AssignmentAST[] {
-    const res: AssignmentAST[] = [];
+  private assignment(): AssignmentAST {
     const columnName = this.consumeIdentifierOrError();
     this.consumeOrError("equal");
-    const value = this.consumeLiteralOrError();
-    res.push({
+    const value = this.expression();
+    return {
       type: "assignment",
       columnName,
       value,
-    });
-    while (this.consume("comma")) {
-      const columnName = this.consumeIdentifierOrError();
-      this.consumeOrError("equals");
-      const value = this.consumeLiteralOrError();
-      res.push({
-        type: "assignment",
-        columnName,
-        value,
-      });
-    }
-    return res;
+    };
   }
-  private selectStmt(): SelectStmtAST {
+  private deleteStatement(): DeleteStatementAST {
+    this.consumeKeywordOrError("DELETE");
+    this.consumeKeywordOrError("FROM");
+    const tableName = this.consumeIdentifierOrError();
+    let condition: ExpressionAST | undefined = undefined;
+    if (this.consumeKeyword("WHERE")) {
+      condition = this.expression();
+    }
+    return {
+      type: "delete_statement",
+      tableName,
+      condition,
+    };
+  }
+  private selectStatement(): SelectStatementAST {
     this.consumeKeywordOrError("SELECT");
     const isAsterisk = this.consume("asterisk");
     const columnNames = [];
@@ -170,14 +174,14 @@ export class Parser {
     }
     this.consumeKeywordOrError("FROM");
     const tableName = this.consumeIdentifierOrError();
-    let condition: ConditionAST | undefined = undefined;
+    let condition: ExpressionAST | undefined = undefined;
     if (this.consumeKeyword("WHERE")) {
-      condition = this.condition();
+      condition = this.expression();
     }
     const orderBy = this.orderBy() ?? undefined;
     const limit = this.limit() ?? undefined;
     return {
-      type: "select_stmt",
+      type: "select_statement",
       tableName,
       isAsterisk,
       columnNames,
@@ -186,16 +190,145 @@ export class Parser {
       limit,
     };
   }
-  private condition(): ConditionAST {
-    const columnName = this.consumeIdentifierOrError();
-    this.consumeOrError("equal");
-    const right = this.consumeLiteralOrError();
-    return {
-      type: "condition",
-      columnName,
-      right,
-    };
+
+  private expression(): ExpressionAST {
+    return this.logicalOr();
   }
+  private logicalOr(): ExpressionAST {
+    let left = this.logicalAnd();
+    while (this.consumeKeyword("OR")) {
+      const right = this.logicalAnd();
+      left = {
+        type: "logical_or",
+        left,
+        right,
+      };
+    }
+    return left;
+  }
+  private logicalAnd(): ExpressionAST {
+    let left = this.logicalNot();
+    while (this.consumeKeyword("AND")) {
+      const right = this.logicalNot();
+      left = {
+        type: "logical_and",
+        left,
+        right,
+      };
+    }
+    return left;
+  }
+  private logicalNot(): ExpressionAST {
+    if (this.consumeKeyword("NOT")) {
+      const expr = this.comparison();
+      return {
+        type: "logical_not",
+        left: expr,
+      };
+    }
+    return this.comparison();
+  }
+  private comparison(): ExpressionAST {
+    const left = this.arithmetic();
+    if (this.consume("less_than")) {
+      const right = this.arithmetic();
+      return {
+        type: "less_than",
+        left,
+        right,
+      };
+    }
+    if (this.consume("greater_than")) {
+      const right = this.arithmetic();
+      return {
+        type: "greater_than",
+        left,
+        right,
+      };
+    }
+    if (this.consume("less_than_equal")) {
+      const right = this.arithmetic();
+      return {
+        type: "less_than_or_equal",
+        left,
+        right,
+      };
+    }
+    if (this.consume("greater_than_equal")) {
+      const right = this.arithmetic();
+      return {
+        type: "greater_than_or_equal",
+        left,
+        right,
+      };
+    }
+    if (this.consume("equal")) {
+      const right = this.arithmetic();
+      return {
+        type: "equal",
+        left,
+        right,
+      };
+    }
+    if (this.consume("not_equal")) {
+      const right = this.arithmetic();
+      return {
+        type: "not_equal",
+        left,
+        right,
+      };
+    }
+    return left;
+  }
+  private arithmetic(): ExpressionAST {
+    let left = this.term();
+    while (this.match("plus") || this.match("minus")) {
+      const operator = this.consume("plus")
+        ? "plus"
+        : (this.consume("minus"), "minus");
+      const right = this.term();
+      left = {
+        type: operator,
+        left,
+        right,
+      };
+    }
+    return left;
+  }
+  private term(): ExpressionAST {
+    let left = this.factor();
+    while (this.match("asterisk")) {
+      this.consume("asterisk");
+      const right = this.factor();
+      left = {
+        type: "multiple",
+        left,
+        right,
+      };
+    }
+    return left;
+  }
+  private factor(): ExpressionAST {
+    if (this.match("literal")) {
+      const value = this.consumeLiteralOrError();
+      return {
+        type: "literal",
+        value,
+      };
+    }
+    if (this.match("identifier")) {
+      const columnName = this.consumeIdentifierOrError();
+      return {
+        type: "identifier",
+        value: columnName,
+      };
+    }
+    this.consumeOrError("left_paren");
+    const expr = this.expression();
+    this.consumeOrError("right_paren");
+    return expr;
+  }
+
   private orderBy(): OrderByAST | null {
     if (!(this.consumeKeyword("ORDER") && this.consumeKeyword("BY"))) {
       return null;
@@ -237,23 +370,30 @@ export class Parser {
       value,
     };
   }
-  private beginStmt(): BeginStmtAST {
+  private beginStatement(): BeginStatementAST {
     this.consumeKeywordOrError("BEGIN");
     return {
-      type: "begin_stmt",
+      type: "begin_statement",
     };
   }
-  private commitStmt(): CommitStmtAST {
+  private commitStatement(): CommitStatementAST {
     this.consumeKeywordOrError("COMMIT");
     return {
-      type: "commit_stmt",
+      type: "commit_statement",
     };
   }
-  private rollbackStmt(): RollbackStmtAST {
+  private rollbackStatement(): RollbackStatementAST {
     this.consumeKeywordOrError("ROLLBACK");
     return {
-      type: "rollback_stmt",
+      type: "rollback_statement",
     };
+  }
+  private match(tokenType: string): boolean {
+    return this.tokens[this.position].type === tokenType;
+  }
+  private matchKeyword(keyword: string): boolean {
+    const current = this.tokens[this.position];
+    return current.type === "keyword" && current.value === keyword;
   }
   private consume(tokenType: string): boolean {
     if (this.tokens[this.position].type === tokenType) {

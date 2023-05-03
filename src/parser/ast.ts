@@ -1,14 +1,17 @@
-export type AST =
-  | CreateTableStmtAST
-  | InsertStmtAST
-  | DeleteStmtAST
-  | UpdateStmtAST
-  | SelectStmtAST
-  | BeginStmtAST
-  | CommitStmtAST
-  | RollbackStmtAST;
-export type CreateTableStmtAST = {
-  type: "create_table_stmt";
+import { LiteralValue } from "./token";
+
+export type StatementAST =
+  | CreateTableStatementAST
+  | DropTableStatementAST
+  | InsertStatementAST
+  | DeleteStatementAST
+  | UpdateStatementAST
+  | SelectStatementAST
+  | BeginStatementAST
+  | CommitStatementAST
+  | RollbackStatementAST;
+export type CreateTableStatementAST = {
+  type: "create_table_statement";
   tableName: string;
   tableElements: TableElementAST[];
 };
@@ -17,48 +20,48 @@ export type TableElementAST = {
   columnName: string;
   columnType: string;
 };
-export type InsertStmtAST = {
-  type: "insert_stmt";
+export type DropTableStatementAST = {
+  type: "drop_table_statement";
   tableName: string;
-  values: Array<string | number | boolean | null>;
 };
-export type DeleteStmtAST = {
-  type: "delete_stmt";
+export type InsertStatementAST = {
+  type: "insert_statement";
   tableName: string;
-  condition?: ConditionAST;
+  columnNames?: string[];
+  values: ExpressionAST[];
 };
-export type BeginStmtAST = {
-  type: "begin_stmt";
+export type DeleteStatementAST = {
+  type: "delete_statement";
+  tableName: string;
+  condition?: ExpressionAST;
 };
-export type CommitStmtAST = {
-  type: "commit_stmt";
-};
-export type RollbackStmtAST = {
-  type: "rollback_stmt";
-};
-// TODO: support complex condition
-export type ConditionAST = {
-  type: "condition";
-  columnName: string;
-  right: string | number | boolean | null;
-};
-export type UpdateStmtAST = {
-  type: "update_stmt";
+export type UpdateStatementAST = {
+  type: "update_statement";
   tableName: string;
   assignments: AssignmentAST[];
-  condition?: ConditionAST;
+  condition?: ExpressionAST;
 };
 export type AssignmentAST = {
   type: "assignment";
   columnName: string;
-  value: string | number | boolean | null;
+  value: ExpressionAST;
 };
-export type SelectStmtAST = {
-  type: "select_stmt";
+export type BeginStatementAST = {
+  type: "begin_statement";
+};
+export type CommitStatementAST = {
+  type: "commit_statement";
+};
+export type RollbackStatementAST = {
+  type: "rollback_statement";
+};
+export type SelectStatementAST = {
+  type: "select_statement";
+  // TODO: join
   tableName: string;
   isAsterisk: boolean;
   columnNames: string[];
-  condition?: ConditionAST;
+  condition?: ExpressionAST;
   orderBy?: OrderByAST;
   limit?: LimitAST;
 };
@@ -74,4 +77,10 @@ export type SortKeyAST = {
 export type LimitAST = {
   type: "limit";
   value: number;
+};
+export type ExpressionAST = {
+  type: string;
+  value?: LiteralValue;
+  left?: ExpressionAST;
+  right?: ExpressionAST;
 };

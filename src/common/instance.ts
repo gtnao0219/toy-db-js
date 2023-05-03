@@ -60,18 +60,18 @@ export class Instance implements Debuggable {
         : this._transactionManager.getTransaction(transactionId)!;
     console.log("transactionId", transaction.transactionId);
     switch (ast.type) {
-      case "begin_stmt":
+      case "begin_statement":
         return {
           transactionId: transaction.transactionId,
           rows: [],
         };
-      case "commit_stmt":
+      case "commit_statement":
         this._transactionManager.commit(transaction);
         return {
           transactionId: null,
           rows: [],
         };
-      case "rollback_stmt":
+      case "rollback_statement":
         this._transactionManager.abort(transaction);
         return {
           transactionId: null,

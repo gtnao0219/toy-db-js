@@ -4,8 +4,8 @@ import { KEYWORDS } from "../../src/parser/token";
 describe("tokenize", () => {
   it("should tokenize null literal", () => {
     expect(tokenize("null NULL")).toEqual([
-      { type: "literal", value: { type: "null" } },
-      { type: "literal", value: { type: "null" } },
+      { type: "literal", value: { type: "null", value: null } },
+      { type: "literal", value: { type: "null", value: null } },
     ]);
   });
   it("should tokenize boolean literal", () => {

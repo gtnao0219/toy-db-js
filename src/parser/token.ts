@@ -65,7 +65,9 @@ export type BooleanLiteral = {
 };
 export type NullLiteral = {
   type: "null";
+  value: null;
 };
+export type LiteralValue = Literal["value"];
 
 export type Token =
   | IdentifierToken
