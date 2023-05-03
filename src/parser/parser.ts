@@ -300,11 +300,14 @@ export class Parser {
       `Expected identifier but got ${this.tokens[this.position].type}`
     );
   }
-  private consumeLiteralOrError(): string | number | boolean {
+  private consumeLiteralOrError(): string | number | boolean | null {
     const token = this.tokens[this.position];
     if (token.type === "literal") {
       const value = token.value;
       this.position++;
+      if (value.type === "null") {
+        return null;
+      }
       return value.value;
     }
     throw new Error(

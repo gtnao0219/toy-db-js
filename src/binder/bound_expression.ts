@@ -2,7 +2,7 @@ import { Tuple } from "../storage/table/tuple";
 import { BoundBaseTableRef } from "./bound_table_ref";
 
 export abstract class BoundExpression {
-  abstract evaluate(tuple: Tuple): number | string | boolean;
+  abstract evaluate(tuple: Tuple): number | string | boolean | null;
 }
 export class BoundColumnRefExpression extends BoundExpression {
   constructor(private _table: BoundBaseTableRef, private _columnIndex: number) {
@@ -14,18 +14,18 @@ export class BoundColumnRefExpression extends BoundExpression {
   get columnIndex(): number {
     return this._columnIndex;
   }
-  evaluate(tuple: Tuple): number | string | boolean {
+  evaluate(tuple: Tuple): number | string | boolean | null {
     return tuple.values[this._columnIndex].value;
   }
 }
 export class BoundLiteralExpression extends BoundExpression {
-  constructor(private _value: number | string | boolean) {
+  constructor(private _value: number | string | boolean | null) {
     super();
   }
-  get value(): number | string | boolean {
+  get value(): number | string | boolean | null {
     return this._value;
   }
-  evaluate(tuple: Tuple): number | string | boolean {
+  evaluate(tuple: Tuple): number | string | boolean | null {
     return this._value;
   }
 }

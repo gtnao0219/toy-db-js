@@ -20,7 +20,7 @@ export type TableElementAST = {
 export type InsertStmtAST = {
   type: "insert_stmt";
   tableName: string;
-  values: Array<string | number | boolean>;
+  values: Array<string | number | boolean | null>;
 };
 export type DeleteStmtAST = {
   type: "delete_stmt";
@@ -40,7 +40,7 @@ export type RollbackStmtAST = {
 export type ConditionAST = {
   type: "condition";
   columnName: string;
-  right: string | number | boolean;
+  right: string | number | boolean | null;
 };
 export type UpdateStmtAST = {
   type: "update_stmt";
@@ -51,7 +51,7 @@ export type UpdateStmtAST = {
 export type AssignmentAST = {
   type: "assignment";
   columnName: string;
-  value: string | number | boolean;
+  value: string | number | boolean | null;
 };
 export type SelectStmtAST = {
   type: "select_stmt";

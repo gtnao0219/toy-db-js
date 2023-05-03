@@ -1,4 +1,4 @@
-import { Token } from "./token";
+import { KEYWORDS, Token } from "./token";
 
 export function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
@@ -19,64 +19,12 @@ export function tokenize(input: string): Token[] {
         }
         char = input[++current];
       }
+      const keyword = KEYWORDS.find((keyword) => keyword === str.toUpperCase());
+      if (keyword != null) {
+        tokens.push({ type: "keyword", value: keyword });
+        continue;
+      }
       switch (str.toUpperCase()) {
-        case "CREATE":
-          tokens.push({ type: "keyword", value: "CREATE" });
-          break;
-        case "TABLE":
-          tokens.push({ type: "keyword", value: "TABLE" });
-          break;
-        case "INSERT":
-          tokens.push({ type: "keyword", value: "INSERT" });
-          break;
-        case "INTO":
-          tokens.push({ type: "keyword", value: "INTO" });
-          break;
-        case "VALUES":
-          tokens.push({ type: "keyword", value: "VALUES" });
-          break;
-        case "DELETE":
-          tokens.push({ type: "keyword", value: "DELETE" });
-          break;
-        case "UPDATE":
-          tokens.push({ type: "keyword", value: "UPDATE" });
-          break;
-        case "SET":
-          tokens.push({ type: "keyword", value: "SET" });
-          break;
-        case "SELECT":
-          tokens.push({ type: "keyword", value: "SELECT" });
-          break;
-        case "FROM":
-          tokens.push({ type: "keyword", value: "FROM" });
-          break;
-        case "WHERE":
-          tokens.push({ type: "keyword", value: "WHERE" });
-          break;
-        case "ORDER":
-          tokens.push({ type: "keyword", value: "ORDER" });
-          break;
-        case "BY":
-          tokens.push({ type: "keyword", value: "BY" });
-          break;
-        case "DESC":
-          tokens.push({ type: "keyword", value: "DESC" });
-          break;
-        case "ASC":
-          tokens.push({ type: "keyword", value: "ASC" });
-          break;
-        case "LIMIT":
-          tokens.push({ type: "keyword", value: "LIMIT" });
-          break;
-        case "INTEGER":
-          tokens.push({ type: "keyword", value: "INTEGER" });
-          break;
-        case "VARCHAR":
-          tokens.push({ type: "keyword", value: "VARCHAR" });
-          break;
-        case "BOOLEAN":
-          tokens.push({ type: "keyword", value: "BOOLEAN" });
-          break;
         case "TRUE":
           tokens.push({
             type: "literal",
@@ -89,14 +37,8 @@ export function tokenize(input: string): Token[] {
             value: { type: "boolean", value: false },
           });
           break;
-        case "BEGIN":
-          tokens.push({ type: "keyword", value: "BEGIN" });
-          break;
-        case "COMMIT":
-          tokens.push({ type: "keyword", value: "COMMIT" });
-          break;
-        case "ROLLBACK":
-          tokens.push({ type: "keyword", value: "ROLLBACK" });
+        case "NULL":
+          tokens.push({ type: "literal", value: { type: "null" } });
           break;
         default:
           tokens.push({ type: "identifier", value: str });
@@ -118,6 +60,11 @@ export function tokenize(input: string): Token[] {
       current++;
       continue;
     }
+    if (char === ".") {
+      tokens.push({ type: "dot" });
+      current++;
+      continue;
+    }
     if (char === "(") {
       tokens.push({ type: "left_paren" });
       current++;
@@ -130,6 +77,41 @@ export function tokenize(input: string): Token[] {
     }
     if (char === "=") {
       tokens.push({ type: "equal" });
+      current++;
+      continue;
+    }
+    if (char === "<") {
+      if (input[current + 1] === "=") {
+        tokens.push({ type: "less_than_equal" });
+        current += 2;
+        continue;
+      }
+      if (input[current + 1] === ">") {
+        tokens.push({ type: "not_equal" });
+        current += 2;
+        continue;
+      }
+      tokens.push({ type: "less_than" });
+      current++;
+      continue;
+    }
+    if (char === ">") {
+      if (input[current + 1] === "=") {
+        tokens.push({ type: "greater_than_equal" });
+        current += 2;
+        continue;
+      }
+      tokens.push({ type: "greater_than" });
+      current++;
+      continue;
+    }
+    if (char === "+") {
+      tokens.push({ type: "plus" });
+      current++;
+      continue;
+    }
+    if (char === "-") {
+      tokens.push({ type: "minus" });
       current++;
       continue;
     }
