@@ -10,6 +10,7 @@ import {
   LimitAST,
   OrderByAST,
   RollbackStatementAST,
+  SelectElementAST,
   SelectStatementAST,
   SortKeyAST,
   StatementAST,
@@ -87,7 +88,6 @@ export class Parser {
       throw new Error("Expected column type");
     }
     return {
-      type: "table_element",
       columnName,
       columnType: columnType,
     };
@@ -143,7 +143,6 @@ export class Parser {
     this.consumeOrError("equal");
     const value = this.expression();
     return {
-      type: "assignment",
       columnName,
       value,
     };
@@ -165,11 +164,11 @@ export class Parser {
   private selectStatement(): SelectStatementAST {
     this.consumeKeywordOrError("SELECT");
     const isAsterisk = this.consume("asterisk");
-    const columnNames = [];
+    const selectElements = [];
     if (!isAsterisk) {
-      columnNames.push(this.consumeIdentifierOrError());
+      selectElements.push(this.selectElement());
       while (this.consume("comma")) {
-        columnNames.push(this.consumeIdentifierOrError());
+        selectElements.push(this.selectElement());
       }
     }
     this.consumeKeywordOrError("FROM");
@@ -184,13 +183,27 @@ export class Parser {
       type: "select_statement",
       tableName,
       isAsterisk,
-      columnNames,
-      condition,
-      orderBy,
-      limit,
+      selectElements,
+      ...(condition != null ? { condition } : {}),
+      ...(orderBy != null ? { orderBy } : {}),
+      ...(limit != null ? { limit } : {}),
+    };
+  }
+  private selectElement(): SelectElementAST {
+    const expression = this.expression();
+    if (this.consumeKeyword("AS")) {
+      const alias = this.consumeIdentifierOrError();
+      return {
+        expression,
+        alias,
+      };
+    }
+    return {
+      expression,
     };
   }
 
+  // expressions
   private expression(): ExpressionAST {
     return this.logicalOr();
   }
@@ -199,7 +212,8 @@ export class Parser {
     while (this.consumeKeyword("OR")) {
       const right = this.logicalAnd();
       left = {
-        type: "logical_or",
+        type: "binary_operation",
+        operator: "OR",
         left,
         right,
       };
@@ -211,7 +225,8 @@ export class Parser {
     while (this.consumeKeyword("AND")) {
       const right = this.logicalNot();
       left = {
-        type: "logical_and",
+        type: "binary_operation",
+        operator: "AND",
         left,
         right,
       };
@@ -220,10 +235,11 @@ export class Parser {
   }
   private logicalNot(): ExpressionAST {
     if (this.consumeKeyword("NOT")) {
-      const expr = this.comparison();
+      const operand = this.comparison();
       return {
-        type: "logical_not",
-        left: expr,
+        type: "unary_operation",
+        operator: "NOT",
+        operand,
       };
     }
     return this.comparison();
@@ -233,7 +249,8 @@ export class Parser {
     if (this.consume("less_than")) {
       const right = this.arithmetic();
       return {
-        type: "less_than",
+        type: "binary_operation",
+        operator: "<",
         left,
         right,
       };
@@ -241,7 +258,8 @@ export class Parser {
     if (this.consume("greater_than")) {
       const right = this.arithmetic();
       return {
-        type: "greater_than",
+        type: "binary_operation",
+        operator: ">",
         left,
         right,
       };
@@ -249,7 +267,8 @@ export class Parser {
     if (this.consume("less_than_equal")) {
       const right = this.arithmetic();
       return {
-        type: "less_than_or_equal",
+        type: "binary_operation",
+        operator: "<=",
         left,
         right,
       };
@@ -257,7 +276,8 @@ export class Parser {
     if (this.consume("greater_than_equal")) {
       const right = this.arithmetic();
       return {
-        type: "greater_than_or_equal",
+        type: "binary_operation",
+        operator: ">=",
         left,
         right,
       };
@@ -265,7 +285,8 @@ export class Parser {
     if (this.consume("equal")) {
       const right = this.arithmetic();
       return {
-        type: "equal",
+        type: "binary_operation",
+        operator: "=",
         left,
         right,
       };
@@ -273,7 +294,8 @@ export class Parser {
     if (this.consume("not_equal")) {
       const right = this.arithmetic();
       return {
-        type: "not_equal",
+        type: "binary_operation",
+        operator: "<>",
         left,
         right,
       };
@@ -283,12 +305,14 @@ export class Parser {
   private arithmetic(): ExpressionAST {
     let left = this.term();
     while (this.match("plus") || this.match("minus")) {
-      const operator = this.consume("plus")
-        ? "plus"
-        : (this.consume("minus"), "minus");
+      const isPlus = this.consume("plus");
+      if (!isPlus) {
+        this.consumeOrError("minus");
+      }
       const right = this.term();
       left = {
-        type: operator,
+        type: "binary_operation",
+        operator: isPlus ? "+" : "-",
         left,
         right,
       };
@@ -301,7 +325,8 @@ export class Parser {
       this.consume("asterisk");
       const right = this.factor();
       left = {
-        type: "multiple",
+        type: "binary_operation",
+        operator: "*",
         left,
         right,
       };
@@ -317,10 +342,14 @@ export class Parser {
       };
     }
     if (this.match("identifier")) {
-      const columnName = this.consumeIdentifierOrError();
+      const path = [];
+      path.push(this.consumeIdentifierOrError());
+      while (this.consume("dot")) {
+        path.push(this.consumeIdentifierOrError());
+      }
       return {
-        type: "identifier",
-        value: columnName,
+        type: "path",
+        path,
       };
     }
     this.consumeOrError("left_paren");
@@ -339,7 +368,6 @@ export class Parser {
       sortKeys.push(this.sortKey());
     }
     return {
-      type: "order_by",
       sortKeys,
     };
   }
@@ -352,7 +380,6 @@ export class Parser {
       direction = "DESC";
     }
     return {
-      type: "sort_key",
       columnName,
       direction,
     };
@@ -366,7 +393,6 @@ export class Parser {
       throw new Error("Expected number");
     }
     return {
-      type: "limit",
       value,
     };
   }

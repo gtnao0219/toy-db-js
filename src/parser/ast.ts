@@ -16,7 +16,6 @@ export type CreateTableStatementAST = {
   tableElements: TableElementAST[];
 };
 export type TableElementAST = {
-  type: "table_element";
   columnName: string;
   columnType: string;
 };
@@ -42,7 +41,6 @@ export type UpdateStatementAST = {
   condition?: ExpressionAST;
 };
 export type AssignmentAST = {
-  type: "assignment";
   columnName: string;
   value: ExpressionAST;
 };
@@ -60,27 +58,59 @@ export type SelectStatementAST = {
   // TODO: join
   tableName: string;
   isAsterisk: boolean;
-  columnNames: string[];
+  selectElements: SelectElementAST[];
   condition?: ExpressionAST;
   orderBy?: OrderByAST;
   limit?: LimitAST;
 };
+export type SelectElementAST = {
+  expression: ExpressionAST;
+  alias?: string;
+};
 export type OrderByAST = {
-  type: "order_by";
   sortKeys: SortKeyAST[];
 };
 export type SortKeyAST = {
-  type: "sort_key";
   columnName: string;
   direction: "ASC" | "DESC";
 };
 export type LimitAST = {
-  type: "limit";
   value: number;
 };
-export type ExpressionAST = {
-  type: string;
-  value?: LiteralValue;
-  left?: ExpressionAST;
-  right?: ExpressionAST;
+export type ExpressionAST =
+  | BinaryOperationExpressionAST
+  | UnaryOperationExpressionAST
+  | LiteralExpressionAST
+  | PathExpressionAST;
+export type BinaryOperator =
+  | "OR"
+  | "AND"
+  | "="
+  | "<"
+  | ">"
+  | "<="
+  | ">="
+  | "<>"
+  | "+"
+  | "-"
+  | "*";
+export type BinaryOperationExpressionAST = {
+  type: "binary_operation";
+  operator: BinaryOperator;
+  left: ExpressionAST;
+  right: ExpressionAST;
+};
+export type UnaryOperator = "NOT";
+export type UnaryOperationExpressionAST = {
+  type: "unary_operation";
+  operator: UnaryOperator;
+  operand: ExpressionAST;
+};
+export type PathExpressionAST = {
+  type: "path";
+  path: string[];
+};
+export type LiteralExpressionAST = {
+  type: "literal";
+  value: LiteralValue;
 };
