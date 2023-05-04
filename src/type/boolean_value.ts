@@ -15,6 +15,9 @@ export class BooleanValue extends InlinedValue {
   get value(): boolean {
     return this._value;
   }
+  get type(): Type {
+    return Type.BOOLEAN;
+  }
   serialize(): ArrayBuffer {
     const buffer = new ArrayBuffer(1);
     const dataView = new DataView(buffer);
@@ -30,5 +33,11 @@ export class BooleanValue extends InlinedValue {
       case Type.VARCHAR:
         return new VarcharValue(this._value.toString());
     }
+  }
+  performAnd(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value && right.value);
+  }
+  performOr(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value || right.value);
   }
 }

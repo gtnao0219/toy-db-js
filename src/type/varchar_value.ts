@@ -18,6 +18,9 @@ export class VarcharValue extends VariableValue {
   get value(): string {
     return this._value;
   }
+  get type(): Type {
+    return Type.VARCHAR;
+  }
   size(): number {
     return new TextEncoder().encode(this._value).length;
   }
@@ -37,5 +40,17 @@ export class VarcharValue extends VariableValue {
       case Type.VARCHAR:
         return new VarcharValue(this._value.toString());
     }
+  }
+  add(right: Value): Value {
+    if (!(right instanceof VarcharValue)) {
+      throw new Error(`Cannot add ${this.type()} and ${right.type()}`);
+    }
+    return new VarcharValue(this._value + right.value);
+  }
+  subtract(right: Value): Value {
+    if (!(right instanceof VarcharValue)) {
+      throw new Error(`Cannot subtract ${this.type()} and ${right.type()}`);
+    }
+    return new VarcharValue(this._value.replace(right.value, ""));
   }
 }

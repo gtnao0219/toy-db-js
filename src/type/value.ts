@@ -1,13 +1,63 @@
+import { IntegerValue } from "./integer_value";
 import {
   Type,
   VARIABLE_VALUE_INLINE_OFFSET_SIZE,
   VARIABLE_VALUE_INLINE_SIZE,
+  isCompatible,
+  priority,
 } from "./type";
+
+type Operator =
+  | "="
+  | "<>"
+  | "<"
+  | ">"
+  | "<="
+  | ">="
+  | "AND"
+  | "OR"
+  | "NOT"
+  | "+"
+  | "-"
+  | "*"
+  | "/"
+  | "||";
 
 export abstract class Value {
   abstract get value(): any;
+  abstract get type(): Type;
   abstract serialize(): ArrayBuffer;
   abstract castAs(type: Type): Value;
+  add(right: Value): Value {
+    const [castedLeft, castedRight] = this.castBasedOnPriority(right);
+    if (
+      castedLeft instanceof IntegerValue &&
+      castedRight instanceof IntegerValue
+    ) {
+      return castedLeft.performAdd(castedRight);
+    }
+    throw new Error(`Cannot add ${this.type} and ${right.type}`);
+  }
+  subtract(right: Value): Value {
+    const [castedLeft, castedRight] = this.castBasedOnPriority(right);
+    if (
+      castedLeft instanceof IntegerValue &&
+      castedRight instanceof IntegerValue
+    ) {
+      return castedLeft.performSubtract(castedRight);
+    }
+    throw new Error(`Cannot subtract ${this.type} and ${right.type}`);
+  }
+  castBasedOnPriority(right: Value): [Value, Value] {
+    if (this.type === right.type) {
+      return [this, right];
+    }
+    if (priority(this.type) > priority(right.type)) {
+      return [this, right.castAs(this.type)];
+    } else {
+      return [this.castAs(right.type), right];
+    }
+  }
 }
 export abstract class InlinedValue extends Value {}
 export abstract class VariableValue extends Value {

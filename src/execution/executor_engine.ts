@@ -5,7 +5,7 @@ import { TupleWithRID } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
 import { ExecutorContext } from "./executor_context";
 import { createExecutor } from "./executor_factory";
-import { PlanNode } from "./plan/plan_node";
+import { PlanNode } from "./plan";
 
 export class ExecutorEngine {
   constructor(

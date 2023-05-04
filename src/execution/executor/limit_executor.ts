@@ -1,6 +1,6 @@
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
-import { LimitPlanNode } from "../plan/limit_plan";
+import { LimitPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class LimitExecutor extends Executor {

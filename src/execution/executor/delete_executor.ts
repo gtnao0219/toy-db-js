@@ -1,7 +1,7 @@
 import { LockMode } from "../../concurrency/lock_manager";
 import { TableHeap, TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
-import { DeletePlanNode } from "../plan/delete_plan_node";
+import { DeletePlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class DeleteExecutor extends Executor {
@@ -18,10 +18,10 @@ export class DeleteExecutor extends Executor {
     this._executorContext.lockManager.lockTable(
       this._executorContext.transaction,
       LockMode.INTENTION_EXCLUSIVE,
-      this._planNode.table.tableOid
+      this._planNode.tableOid
     );
     this.tableHeap = await this._executorContext.catalog.getTableHeapByOid(
-      this._planNode.table.tableOid
+      this._planNode.tableOid
     );
   }
   async next(): Promise<TupleWithRID | null> {
@@ -33,7 +33,7 @@ export class DeleteExecutor extends Executor {
       await this._executorContext.lockManager.lockRow(
         this._executorContext.transaction,
         LockMode.EXCLUSIVE,
-        this._planNode.table.tableOid,
+        this._planNode.tableOid,
         tuple.rid
       );
       await this.tableHeap.markDelete(

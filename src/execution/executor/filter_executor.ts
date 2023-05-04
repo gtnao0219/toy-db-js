@@ -1,6 +1,6 @@
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
-import { FilterPlanNode } from "../plan/filter_plan";
+import { FilterPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class FilterExecutor extends Executor {

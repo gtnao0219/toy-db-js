@@ -2,7 +2,7 @@ import { LockMode } from "../../concurrency/lock_manager";
 import { IsolationLevel } from "../../concurrency/transaction";
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
-import { SeqScanPlanNode } from "../plan/seq_scan_plan_node";
+import { SeqScanPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class SeqScanExecutor extends Executor {
@@ -20,10 +20,10 @@ export class SeqScanExecutor extends Executor {
     this._executorContext.lockManager.lockTable(
       this._executorContext.transaction,
       LockMode.INTENTION_SHARED,
-      this._planNode.table.tableOid
+      this._planNode.tableOid
     );
     const tableHeap = await this._executorContext.catalog.getTableHeapByOid(
-      this._planNode.table.tableOid
+      this._planNode.tableOid
     );
     this._tuples = await tableHeap.scan();
   }
@@ -44,7 +44,7 @@ export class SeqScanExecutor extends Executor {
         );
         this._executorContext.lockManager.unlockTable(
           this._executorContext.transaction,
-          this._planNode.table.tableOid
+          this._planNode.tableOid
         );
       }
       return null;
@@ -57,7 +57,7 @@ export class SeqScanExecutor extends Executor {
       await this._executorContext.lockManager.lockRow(
         this._executorContext.transaction,
         LockMode.SHARED,
-        this._planNode.table.tableOid,
+        this._planNode.tableOid,
         tuple.rid
       );
     }

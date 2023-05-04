@@ -14,7 +14,6 @@ import {
   RollbackStatementAST,
   SelectElementAST,
   SelectStatementAST,
-  SimpleTableReferenceAST,
   SortKeyAST,
   StatementAST,
   TableElementAST,
@@ -103,66 +102,6 @@ export class Parser {
     return {
       type: "drop_table_statement",
       tableName,
-    };
-  }
-  private insertStatement(): InsertStatementAST {
-    this.consumeKeywordOrError("INSERT");
-    this.consumeKeywordOrError("INTO");
-    const tableName = this.consumeIdentifierOrError();
-    this.consumeKeywordOrError("VALUES");
-    this.consumeOrError("left_paren");
-    const values = [];
-    values.push(this.expression());
-    while (this.consume("comma")) {
-      values.push(this.expression());
-    }
-    return {
-      type: "insert_statement",
-      tableName,
-      values,
-    };
-  }
-  private updateStatement(): UpdateStatementAST {
-    this.consumeKeywordOrError("UPDATE");
-    const tableName = this.consumeIdentifierOrError();
-    this.consumeKeywordOrError("SET");
-    const assignments = [];
-    assignments.push(this.assignment());
-    while (this.consume("comma")) {
-      assignments.push(this.assignment());
-    }
-    let condition: ExpressionAST | undefined = undefined;
-    if (this.consumeKeyword("WHERE")) {
-      condition = this.expression();
-    }
-    return {
-      type: "update_statement",
-      tableName,
-      assignments,
-      condition,
-    };
-  }
-  private assignment(): AssignmentAST {
-    const columnName = this.consumeIdentifierOrError();
-    this.consumeOrError("equal");
-    const value = this.expression();
-    return {
-      columnName,
-      value,
-    };
-  }
-  private deleteStatement(): DeleteStatementAST {
-    this.consumeKeywordOrError("DELETE");
-    this.consumeKeywordOrError("FROM");
-    const tableName = this.consumeIdentifierOrError();
-    let condition: ExpressionAST | undefined = undefined;
-    if (this.consumeKeyword("WHERE")) {
-      condition = this.expression();
-    }
-    return {
-      type: "delete_statement",
-      tableName,
-      condition,
     };
   }
   private selectStatement(): SelectStatementAST {
@@ -263,6 +202,66 @@ export class Parser {
       joinType,
       left,
       right,
+      condition,
+    };
+  }
+  private insertStatement(): InsertStatementAST {
+    this.consumeKeywordOrError("INSERT");
+    this.consumeKeywordOrError("INTO");
+    const tableName = this.consumeIdentifierOrError();
+    this.consumeKeywordOrError("VALUES");
+    this.consumeOrError("left_paren");
+    const values = [];
+    values.push(this.expression());
+    while (this.consume("comma")) {
+      values.push(this.expression());
+    }
+    return {
+      type: "insert_statement",
+      tableName,
+      values,
+    };
+  }
+  private updateStatement(): UpdateStatementAST {
+    this.consumeKeywordOrError("UPDATE");
+    const tableName = this.consumeIdentifierOrError();
+    this.consumeKeywordOrError("SET");
+    const assignments = [];
+    assignments.push(this.assignment());
+    while (this.consume("comma")) {
+      assignments.push(this.assignment());
+    }
+    let condition: ExpressionAST | undefined = undefined;
+    if (this.consumeKeyword("WHERE")) {
+      condition = this.expression();
+    }
+    return {
+      type: "update_statement",
+      tableName,
+      assignments,
+      condition,
+    };
+  }
+  private assignment(): AssignmentAST {
+    const columnName = this.consumeIdentifierOrError();
+    this.consumeOrError("equal");
+    const value = this.expression();
+    return {
+      columnName,
+      value,
+    };
+  }
+  private deleteStatement(): DeleteStatementAST {
+    this.consumeKeywordOrError("DELETE");
+    this.consumeKeywordOrError("FROM");
+    const tableName = this.consumeIdentifierOrError();
+    let condition: ExpressionAST | undefined = undefined;
+    if (this.consumeKeyword("WHERE")) {
+      condition = this.expression();
+    }
+    return {
+      type: "delete_statement",
+      tableName,
       condition,
     };
   }
@@ -436,7 +435,7 @@ export class Parser {
     };
   }
   private sortKey(): SortKeyAST {
-    const columnName = this.consumeIdentifierOrError();
+    const expression = this.expression();
     let direction: "ASC" | "DESC" = "ASC";
     if (this.consumeKeyword("ASC")) {
       direction = "ASC";
@@ -444,7 +443,7 @@ export class Parser {
       direction = "DESC";
     }
     return {
-      columnName,
+      expression,
       direction,
     };
   }

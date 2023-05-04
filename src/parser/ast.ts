@@ -3,10 +3,10 @@ import { LiteralValue } from "./token";
 export type StatementAST =
   | CreateTableStatementAST
   | DropTableStatementAST
-  | InsertStatementAST
-  | DeleteStatementAST
-  | UpdateStatementAST
   | SelectStatementAST
+  | InsertStatementAST
+  | UpdateStatementAST
+  | DeleteStatementAST
   | BeginStatementAST
   | CommitStatementAST
   | RollbackStatementAST;
@@ -23,36 +23,6 @@ export type DropTableStatementAST = {
   type: "drop_table_statement";
   tableName: string;
 };
-export type InsertStatementAST = {
-  type: "insert_statement";
-  tableName: string;
-  columnNames?: string[];
-  values: ExpressionAST[];
-};
-export type DeleteStatementAST = {
-  type: "delete_statement";
-  tableName: string;
-  condition?: ExpressionAST;
-};
-export type UpdateStatementAST = {
-  type: "update_statement";
-  tableName: string;
-  assignments: AssignmentAST[];
-  condition?: ExpressionAST;
-};
-export type AssignmentAST = {
-  columnName: string;
-  value: ExpressionAST;
-};
-export type BeginStatementAST = {
-  type: "begin_statement";
-};
-export type CommitStatementAST = {
-  type: "commit_statement";
-};
-export type RollbackStatementAST = {
-  type: "rollback_statement";
-};
 export type SelectStatementAST = {
   type: "select_statement";
   isAsterisk: boolean;
@@ -67,11 +37,11 @@ export type SelectElementAST = {
   alias?: string;
 };
 export type TableReferenceAST =
-  | SimpleTableReferenceAST
+  | BaseTableReferenceAST
   | JoinTableReferenceAST
   | SubqueryTableReferenceAST;
-export type SimpleTableReferenceAST = {
-  type: "simple_table_reference";
+export type BaseTableReferenceAST = {
+  type: "base_table_reference";
   tableName: string;
   alias?: string;
 };
@@ -93,11 +63,42 @@ export type OrderByAST = {
 };
 export type Direction = "ASC" | "DESC";
 export type SortKeyAST = {
-  columnName: string;
+  expression: ExpressionAST;
   direction: Direction;
 };
 export type LimitAST = {
-  value: number;
+  count: number;
+};
+export type InsertStatementAST = {
+  type: "insert_statement";
+  tableName: string;
+  // TODO: support multiple rows and select statement
+  values: ExpressionAST[];
+};
+export type DeleteStatementAST = {
+  type: "delete_statement";
+  tableName: string;
+  condition?: ExpressionAST;
+};
+export type UpdateStatementAST = {
+  type: "update_statement";
+  tableName: string;
+  assignments: AssignmentAST[];
+  condition?: ExpressionAST;
+};
+export type AssignmentAST = {
+  // TODO: support path expression
+  columnName: string;
+  value: ExpressionAST;
+};
+export type BeginStatementAST = {
+  type: "begin_statement";
+};
+export type CommitStatementAST = {
+  type: "commit_statement";
+};
+export type RollbackStatementAST = {
+  type: "rollback_statement";
 };
 export type ExpressionAST =
   | BinaryOperationExpressionAST

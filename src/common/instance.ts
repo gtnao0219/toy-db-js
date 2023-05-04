@@ -1,6 +1,4 @@
 import { Binder } from "../binder/binder";
-import { CreateTableStatement } from "../binder/statement/create_table_statement";
-import { StatementType } from "../binder/statement/statement";
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Catalog } from "../catalog/catalog";
 import { LockManager } from "../concurrency/lock_manager";
@@ -8,7 +6,7 @@ import { Transaction } from "../concurrency/transaction";
 import { TransactionManager } from "../concurrency/transaction_manager";
 import { ExecutorContext } from "../execution/executor_context";
 import { ExecutorEngine } from "../execution/executor_engine";
-import { planStatement } from "../execution/plan/planner";
+import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
 import { DiskManager } from "../storage/disk/disk_manager";
 import { Tuple } from "../storage/table/tuple";
@@ -90,11 +88,8 @@ export class Instance implements Debuggable {
       this._catalog
     );
 
-    switch (statement.statementType) {
-      case StatementType.CREATE_TABLE:
-        if (!(statement instanceof CreateTableStatement)) {
-          throw new Error("Invalid statement");
-        }
+    switch (statement.type) {
+      case "create_table_statement":
         this._catalog.createTable(
           statement.tableName,
           statement.schema,
@@ -106,8 +101,11 @@ export class Instance implements Debuggable {
         };
     }
 
-    const plan = planStatement(statement);
-    const tuples = await this._executorEngine.execute(executorContext, plan);
+    const planNode = plan(statement);
+    const tuples = await this._executorEngine.execute(
+      executorContext,
+      planNode
+    );
     if (transactionId == null) {
       this._transactionManager.commit(transaction);
     }

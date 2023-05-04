@@ -8,60 +8,52 @@ import { SeqScanExecutor } from "./executor/seq_scan_executor";
 import { SortExecutor } from "./executor/sort_executor";
 import { UpdateExecutor } from "./executor/update_executor";
 import { ExecutorContext } from "./executor_context";
-import { DeletePlanNode } from "./plan/delete_plan_node";
-import { FilterPlanNode } from "./plan/filter_plan";
-import { InsertPlanNode } from "./plan/insert_plan_node";
-import { LimitPlanNode } from "./plan/limit_plan";
-import { PlanNode, PlanType } from "./plan/plan_node";
-import { ProjectionPlanNode } from "./plan/projection_plan";
-import { SeqScanPlanNode } from "./plan/seq_scan_plan_node";
-import { SortPlanNode } from "./plan/sort_plan";
-import { UpdatePlanNode } from "./plan/update_plan_node";
+import { PlanNode } from "./plan";
 
 export function createExecutor(
   executorContext: ExecutorContext,
   plan: PlanNode
 ): Executor {
-  switch (plan.planType) {
-    case PlanType.INSERT:
-      return new InsertExecutor(executorContext, plan as InsertPlanNode);
-    case PlanType.DELETE:
+  switch (plan.type) {
+    case "insert":
+      return new InsertExecutor(executorContext, plan);
+    case "delete":
       return new DeleteExecutor(
         executorContext,
-        plan as DeletePlanNode,
-        createExecutor(executorContext, (plan as DeletePlanNode).child)
+        plan,
+        createExecutor(executorContext, plan.child)
       );
-    case PlanType.UPDATE:
+    case "update":
       return new UpdateExecutor(
         executorContext,
-        plan as UpdatePlanNode,
-        createExecutor(executorContext, (plan as UpdatePlanNode).child)
+        plan,
+        createExecutor(executorContext, plan.child)
       );
-    case PlanType.SEQ_SCAN:
-      return new SeqScanExecutor(executorContext, plan as SeqScanPlanNode);
-    case PlanType.PROJECTION:
+    case "seq_scan":
+      return new SeqScanExecutor(executorContext, plan);
+    case "project":
       return new ProjectionExecutor(
         executorContext,
-        plan as ProjectionPlanNode,
-        createExecutor(executorContext, (plan as ProjectionPlanNode).child)
+        plan,
+        createExecutor(executorContext, plan.child)
       );
-    case PlanType.FILTER:
+    case "filter":
       return new FilterExecutor(
         executorContext,
-        plan as FilterPlanNode,
-        createExecutor(executorContext, (plan as FilterPlanNode).child)
+        plan,
+        createExecutor(executorContext, plan.child)
       );
-    case PlanType.SORT:
+    case "sort":
       return new SortExecutor(
         executorContext,
-        plan as SortPlanNode,
-        createExecutor(executorContext, (plan as SortPlanNode).child)
+        plan,
+        createExecutor(executorContext, plan.child)
       );
-    case PlanType.LIMIT:
+    case "limit":
       return new LimitExecutor(
         executorContext,
-        plan as LimitPlanNode,
-        createExecutor(executorContext, (plan as LimitPlanNode).child)
+        plan,
+        createExecutor(executorContext, plan.child)
       );
     default:
       throw new Error("Unsupported plan type");

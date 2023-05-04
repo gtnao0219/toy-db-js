@@ -7,8 +7,8 @@ import { LockManager } from "../concurrency/lock_manager";
 import { TransactionManager } from "../concurrency/transaction_manager";
 import { ExecutorContext } from "../execution/executor_context";
 import { ExecutorEngine } from "../execution/executor_engine";
-import { PlanNode } from "../execution/plan/plan_node";
-import { planStatement } from "../execution/plan/planner";
+import { PlanNode } from "../execution/plan";
+import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
 import { DiskManager } from "../storage/disk/disk_manager";
 import { Type } from "../type/type";
@@ -107,6 +107,6 @@ async function generatePlan(sql: string, catalog: Catalog): Promise<PlanNode> {
   const ast = parser.parse();
   const binder = new Binder(catalog);
   const statement = await binder.bind(ast);
-  const plan = planStatement(statement);
-  return plan;
+  const planNode = plan(statement);
+  return planNode;
 }

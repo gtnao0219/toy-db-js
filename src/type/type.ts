@@ -26,6 +26,19 @@ export function typeSize(type: Type): number {
       return VARIABLE_VALUE_INLINE_SIZE;
   }
 }
+export function priority(type: Type): number {
+  switch (type) {
+    case Type.BOOLEAN:
+      return 0;
+    case Type.INTEGER:
+      return 1;
+    case Type.VARCHAR:
+      return 2;
+  }
+}
+export function isCompatible(left: Type, right: Type): boolean {
+  return true;
+}
 export function string2Type(str: string): Type {
   switch (str.toUpperCase()) {
     case "INTEGER":

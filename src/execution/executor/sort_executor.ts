@@ -1,6 +1,6 @@
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
-import { SortPlanNode } from "../plan/sort_plan";
+import { SortPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class SortExecutor extends Executor {

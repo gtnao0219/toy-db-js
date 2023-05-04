@@ -12,6 +12,9 @@ export class IntegerValue extends InlinedValue {
     const value = dataView.getInt32(offset);
     return new IntegerValue(value);
   }
+  get type(): Type {
+    return Type.INTEGER;
+  }
   get value(): number {
     return this._value;
   }
@@ -30,5 +33,38 @@ export class IntegerValue extends InlinedValue {
       case Type.VARCHAR:
         return new VarcharValue(this._value.toString());
     }
+  }
+  performAdd(right: IntegerValue): IntegerValue {
+    return new IntegerValue(this._value + right.value);
+  }
+  performSubtract(right: IntegerValue): IntegerValue {
+    return new IntegerValue(this._value - right.value);
+  }
+  performMultiply(right: IntegerValue): IntegerValue {
+    return new IntegerValue(this._value * right.value);
+  }
+  performEqual(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value === right.value);
+  }
+  performNotEqual(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value !== right.value);
+  }
+  performLessThan(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value < right.value);
+  }
+  performGreaterThan(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value > right.value);
+  }
+  performLessThanOrEqual(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value <= right.value);
+  }
+  performGreaterThanOrEqual(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value >= right.value);
+  }
+  performAnd(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value !== 0 && right.value !== 0);
+  }
+  performOr(right: IntegerValue): BooleanValue {
+    return new BooleanValue(this._value !== 0 || right.value !== 0);
   }
 }
