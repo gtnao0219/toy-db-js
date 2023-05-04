@@ -12,7 +12,7 @@ describe("Parser", () => {
         isAsterisk: true,
         selectElements: [],
         tableReference: {
-          type: "simple_table_reference",
+          type: "base_table_reference",
           tableName: "users",
         },
       });
@@ -29,7 +29,7 @@ describe("Parser", () => {
           { expression: { type: "path", path: ["name"] } },
         ],
         tableReference: {
-          type: "simple_table_reference",
+          type: "base_table_reference",
           tableName: "users",
         },
       });
@@ -54,7 +54,7 @@ describe("Parser", () => {
           },
         ],
         tableReference: {
-          type: "simple_table_reference",
+          type: "base_table_reference",
           tableName: "users",
         },
       });
@@ -75,11 +75,11 @@ describe("Parser", () => {
             type: "join_table_reference",
             joinType: "INNER",
             left: {
-              type: "simple_table_reference",
+              type: "base_table_reference",
               tableName: "users",
             },
             right: {
-              type: "simple_table_reference",
+              type: "base_table_reference",
               tableName: "posts",
             },
             condition: {
@@ -96,7 +96,7 @@ describe("Parser", () => {
             },
           },
           right: {
-            type: "simple_table_reference",
+            type: "base_table_reference",
             tableName: "comments",
           },
           condition: {
@@ -129,7 +129,7 @@ describe("Parser", () => {
             isAsterisk: true,
             selectElements: [],
             tableReference: {
-              type: "simple_table_reference",
+              type: "base_table_reference",
               tableName: "posts",
             },
           },
@@ -146,7 +146,7 @@ describe("Parser", () => {
         isAsterisk: true,
         selectElements: [],
         tableReference: {
-          type: "simple_table_reference",
+          type: "base_table_reference",
           tableName: "users",
         },
         condition: {
@@ -158,7 +158,7 @@ describe("Parser", () => {
       });
     });
     it("should parse a select statement with order by clause", () => {
-      const sql = "SELECT * FROM users ORDER BY id, name DESC";
+      const sql = "SELECT * FROM users ORDER BY id, users.name DESC";
       const parser = new Parser(sql);
       const ast = parser.parse();
       expect(ast).toEqual({
@@ -166,17 +166,23 @@ describe("Parser", () => {
         isAsterisk: true,
         selectElements: [],
         tableReference: {
-          type: "simple_table_reference",
+          type: "base_table_reference",
           tableName: "users",
         },
         orderBy: {
           sortKeys: [
             {
-              columnName: "id",
+              expression: {
+                type: "path",
+                path: ["id"],
+              },
               direction: "ASC",
             },
             {
-              columnName: "name",
+              expression: {
+                type: "path",
+                path: ["users", "name"],
+              },
               direction: "DESC",
             },
           ],
@@ -192,11 +198,11 @@ describe("Parser", () => {
         isAsterisk: true,
         selectElements: [],
         tableReference: {
-          type: "simple_table_reference",
+          type: "base_table_reference",
           tableName: "users",
         },
         limit: {
-          value: 10,
+          count: 10,
         },
       });
     });
@@ -265,8 +271,8 @@ describe("Parser", () => {
         type: "create_table_statement",
         tableName: "users",
         tableElements: [
-          { columnName: "id", columnType: "INTEGER" },
-          { columnName: "name", columnType: "VARCHAR" },
+          { columnName: "id", dataType: "INTEGER" },
+          { columnName: "name", dataType: "VARCHAR" },
         ],
       });
     });

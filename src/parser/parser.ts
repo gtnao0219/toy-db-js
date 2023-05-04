@@ -78,21 +78,19 @@ export class Parser {
   }
   private tableElement(): TableElementAST {
     const columnName = this.consumeIdentifierOrError();
-    let columnType: string;
+    let dataType: string;
     if (this.consumeKeyword("INTEGER")) {
-      columnType = "INTEGER";
-    } else if (this.consumeKeyword("FLOAT")) {
-      columnType = "FLOAT";
+      dataType = "INTEGER";
     } else if (this.consumeKeyword("VARCHAR")) {
-      columnType = "VARCHAR";
+      dataType = "VARCHAR";
     } else if (this.consumeKeyword("BOOLEAN")) {
-      columnType = "BOOLEAN";
+      dataType = "BOOLEAN";
     } else {
       throw new Error("Expected column type");
     }
     return {
       columnName,
-      columnType: columnType,
+      dataType,
     };
   }
   private dropTableStatement(): DropTableStatementAST {
@@ -161,7 +159,7 @@ export class Parser {
     } else {
       const tableName = this.consumeIdentifierOrError();
       left = {
-        type: "simple_table_reference",
+        type: "base_table_reference",
         tableName,
       };
       if (this.consumeKeyword("AS")) {
@@ -205,6 +203,44 @@ export class Parser {
       condition,
     };
   }
+  private orderBy(): OrderByAST | null {
+    if (!(this.consumeKeyword("ORDER") && this.consumeKeyword("BY"))) {
+      return null;
+    }
+    const sortKeys = [];
+    sortKeys.push(this.sortKey());
+    while (this.consume("comma")) {
+      sortKeys.push(this.sortKey());
+    }
+    return {
+      sortKeys,
+    };
+  }
+  private sortKey(): SortKeyAST {
+    const expression = this.expression();
+    let direction: "ASC" | "DESC" = "ASC";
+    if (this.consumeKeyword("ASC")) {
+      direction = "ASC";
+    } else if (this.consumeKeyword("DESC")) {
+      direction = "DESC";
+    }
+    return {
+      expression,
+      direction,
+    };
+  }
+  private limit(): LimitAST | null {
+    if (!this.consumeKeyword("LIMIT")) {
+      return null;
+    }
+    const value = this.consumeLiteralOrError();
+    if (typeof value !== "number") {
+      throw new Error("Expected number");
+    }
+    return {
+      count: value,
+    };
+  }
   private insertStatement(): InsertStatementAST {
     this.consumeKeywordOrError("INSERT");
     this.consumeKeywordOrError("INTO");
@@ -239,7 +275,7 @@ export class Parser {
       type: "update_statement",
       tableName,
       assignments,
-      condition,
+      ...(condition != null ? { condition } : {}),
     };
   }
   private assignment(): AssignmentAST {
@@ -262,7 +298,25 @@ export class Parser {
     return {
       type: "delete_statement",
       tableName,
-      condition,
+      ...(condition != null ? { condition } : {}),
+    };
+  }
+  private beginStatement(): BeginStatementAST {
+    this.consumeKeywordOrError("BEGIN");
+    return {
+      type: "begin_statement",
+    };
+  }
+  private commitStatement(): CommitStatementAST {
+    this.consumeKeywordOrError("COMMIT");
+    return {
+      type: "commit_statement",
+    };
+  }
+  private rollbackStatement(): RollbackStatementAST {
+    this.consumeKeywordOrError("ROLLBACK");
+    return {
+      type: "rollback_statement",
     };
   }
 
@@ -421,62 +475,7 @@ export class Parser {
     return expr;
   }
 
-  private orderBy(): OrderByAST | null {
-    if (!(this.consumeKeyword("ORDER") && this.consumeKeyword("BY"))) {
-      return null;
-    }
-    const sortKeys = [];
-    sortKeys.push(this.sortKey());
-    while (this.consume("comma")) {
-      sortKeys.push(this.sortKey());
-    }
-    return {
-      sortKeys,
-    };
-  }
-  private sortKey(): SortKeyAST {
-    const expression = this.expression();
-    let direction: "ASC" | "DESC" = "ASC";
-    if (this.consumeKeyword("ASC")) {
-      direction = "ASC";
-    } else if (this.consumeKeyword("DESC")) {
-      direction = "DESC";
-    }
-    return {
-      expression,
-      direction,
-    };
-  }
-  private limit(): LimitAST | null {
-    if (!this.consumeKeyword("LIMIT")) {
-      return null;
-    }
-    const value = this.consumeLiteralOrError();
-    if (typeof value !== "number") {
-      throw new Error("Expected number");
-    }
-    return {
-      value,
-    };
-  }
-  private beginStatement(): BeginStatementAST {
-    this.consumeKeywordOrError("BEGIN");
-    return {
-      type: "begin_statement",
-    };
-  }
-  private commitStatement(): CommitStatementAST {
-    this.consumeKeywordOrError("COMMIT");
-    return {
-      type: "commit_statement",
-    };
-  }
-  private rollbackStatement(): RollbackStatementAST {
-    this.consumeKeywordOrError("ROLLBACK");
-    return {
-      type: "rollback_statement",
-    };
-  }
+  // utils
   private match(tokenType: string): boolean {
     return this.tokens[this.position].type === tokenType;
   }

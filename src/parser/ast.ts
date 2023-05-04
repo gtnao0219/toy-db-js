@@ -17,7 +17,7 @@ export type CreateTableStatementAST = {
 };
 export type TableElementAST = {
   columnName: string;
-  columnType: string;
+  dataType: string;
 };
 export type DropTableStatementAST = {
   type: "drop_table_statement";
@@ -27,6 +27,7 @@ export type SelectStatementAST = {
   type: "select_statement";
   isAsterisk: boolean;
   selectElements: SelectElementAST[];
+  // TODO: optional
   tableReference: TableReferenceAST;
   condition?: ExpressionAST;
   orderBy?: OrderByAST;

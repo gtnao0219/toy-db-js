@@ -2,7 +2,6 @@ export const KEYWORDS = [
   "CREATE",
   "TABLE",
   "INDEX",
-  "DEFAULT",
   "DROP",
   "INSERT",
   "INTO",
@@ -12,15 +11,11 @@ export const KEYWORDS = [
   "UPDATE",
   "SET",
   "SELECT",
-  "DISTINCT",
   "INNER",
   "LEFT",
   "RIGHT",
-  "FULL",
-  "OUTER",
   "JOIN",
   "ON",
-  "WITH",
   "WHERE",
   "GROUP",
   "BY",
@@ -30,7 +25,6 @@ export const KEYWORDS = [
   "ASC",
   "LIMIT",
   "INTEGER",
-  "FLOAT",
   "VARCHAR",
   "BOOLEAN",
   "LIKE",
@@ -71,6 +65,7 @@ export type LiteralValue = Literal["value"];
 
 export type Token =
   | IdentifierToken
+  | KeywordToken
   | LiteralToken
   | AsteriskToken
   | SemicolonToken
@@ -86,12 +81,15 @@ export type Token =
   | GreaterThanEqualToken
   | PlusToken
   | MinusToken
-  | KeywordToken
   | EOFToken;
 
 export type IdentifierToken = {
   type: "identifier";
   value: string;
+};
+export type KeywordToken = {
+  type: "keyword";
+  value: Keyword;
 };
 export type LiteralToken = {
   type: "literal";
@@ -138,10 +136,6 @@ export type PlusToken = {
 };
 export type MinusToken = {
   type: "minus";
-};
-export type KeywordToken = {
-  type: "keyword";
-  value: Keyword;
 };
 export type EOFToken = {
   type: "eof";
