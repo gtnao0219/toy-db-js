@@ -202,7 +202,10 @@ describe("Parser", () => {
           tableName: "users",
         },
         limit: {
-          count: 10,
+          count: {
+            type: "literal",
+            value: 10,
+          },
         },
       });
     });
@@ -232,7 +235,10 @@ describe("Parser", () => {
         tableName: "users",
         assignments: [
           {
-            columnName: "name",
+            target: {
+              type: "path",
+              path: ["name"],
+            },
             value: { type: "literal", value: "foo" },
           },
         ],

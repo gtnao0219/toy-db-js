@@ -59,13 +59,19 @@ describe("planner", () => {
           ],
         },
         limit: {
-          count: 1,
+          count: {
+            type: "literal",
+            value: 1,
+          },
         },
       };
       const planNode = plan(statement);
       expect(planNode).toEqual({
         type: "limit",
-        count: 1,
+        count: {
+          type: "literal",
+          value: 1,
+        },
         outputSchema: new Schema([
           new Column("_id", Type.INTEGER),
           new Column("name", Type.VARCHAR),

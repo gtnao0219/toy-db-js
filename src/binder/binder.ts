@@ -5,6 +5,7 @@ import {
   BinaryOperationExpressionAST,
   CreateTableStatementAST,
   DeleteStatementAST,
+  DropTableStatementAST,
   ExpressionAST,
   InsertStatementAST,
   LiteralExpressionAST,
@@ -32,15 +33,22 @@ import {
   BoundLiteralExpression,
   BoundJoinTableReference,
   BoundSubqueryTableReference,
+  BoundDropTableStatement,
+  BoundSelectElement,
 } from "./bound";
 
 export class Binder {
-  private scope: BoundTableReference | null = null;
+  private scope:
+    | BoundTableReference
+    | { type: "select_elements"; selectElements: BoundSelectElement[] }
+    | null = null;
   constructor(private _catalog: ICatalog) {}
   async bind(ast: StatementAST): Promise<BoundStatement> {
     switch (ast.type) {
       case "create_table_statement":
         return this.bindCreateTable(ast);
+      case "drop_table_statement":
+        return this.bindDropTable(ast);
       case "select_statement":
         return this.bindSelect(ast);
       case "insert_statement":
@@ -77,6 +85,21 @@ export class Binder {
       schema: new Schema(columns),
     };
   }
+  async bindDropTable(
+    ast: DropTableStatementAST
+  ): Promise<BoundDropTableStatement> {
+    const tableReference = await this.bindTableReference({
+      type: "base_table_reference",
+      tableName: ast.tableName,
+    });
+    if (tableReference.type !== "base_table_reference") {
+      throw new Error("Unexpected table reference type");
+    }
+    return {
+      type: "drop_table_statement",
+      tableReference,
+    };
+  }
   async bindSelect(ast: SelectStatementAST): Promise<BoundSelectStatement> {
     const tableReference = await this.bindTableReference(ast.tableReference);
     this.scope = tableReference;
@@ -87,19 +110,30 @@ export class Binder {
       };
     });
     const condition =
-      ast.condition != null ? this.bindExpression(ast.condition) : undefined;
-    // TODO: scope change?
+      ast.condition != null ? this.bindExpression(ast.condition) : null;
+    if (!ast.isAsterisk) {
+      this.scope = {
+        type: "select_elements",
+        selectElements,
+      };
+    }
     const orderBy =
       ast.orderBy != null
         ? {
             sortKeys: ast.orderBy.sortKeys.map((sortKey) => {
               return {
-                expression: this.bindExpression(sortKey.expression),
+                expression: this.bindPathExpression(sortKey.expression),
                 direction: sortKey.direction,
               };
             }),
           }
-        : undefined;
+        : null;
+    const limit =
+      ast.limit != null
+        ? {
+            count: this.bindExpression(ast.limit.count),
+          }
+        : null;
     return {
       type: "select_statement",
       isAsterisk: ast.isAsterisk,
@@ -107,7 +141,7 @@ export class Binder {
       tableReference,
       ...(condition != null ? { condition } : {}),
       ...(orderBy != null ? { orderBy } : {}),
-      ...(ast.limit != null ? { limit: ast.limit } : {}),
+      ...(limit != null ? { limit } : {}),
     };
   }
   async bindTableReference(
@@ -144,79 +178,64 @@ export class Binder {
     }
   }
   async bindInsert(ast: InsertStatementAST): Promise<BoundInsertStatement> {
-    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
-    const schema = await this._catalog.getSchemaByOid(tableOid);
-    if (ast.values.length !== schema.columns.length) {
+    const tableReference = await this.bindTableReference({
+      type: "base_table_reference",
+      tableName: ast.tableName,
+    });
+    if (tableReference.type !== "base_table_reference") {
+      throw new Error("Unexpected table reference type");
+    }
+    if (ast.values.length !== tableReference.schema.columns.length) {
       throw new Error("Number of values does not match number of columns");
     }
     const values = ast.values.map((value) => this.bindExpression(value));
     return {
       type: "insert_statement",
-      tableReference: {
-        type: "base_table_reference",
-        tableName: ast.tableName,
-        tableOid,
-        schema,
-      },
+      tableReference,
       values,
     };
   }
   async bindUpdate(ast: UpdateStatementAST): Promise<BoundUpdateStatement> {
-    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
-    const schema = await this._catalog.getSchemaByOid(tableOid);
-    this.scope = {
+    const tableReference = await this.bindTableReference({
       type: "base_table_reference",
       tableName: ast.tableName,
-      tableOid,
-      schema,
-    };
+    });
+    if (tableReference.type !== "base_table_reference") {
+      throw new Error("Unexpected table reference type");
+    }
+    this.scope = tableReference;
     const assignments = ast.assignments.map((assignment) => {
-      const columnIndex = schema.columns.findIndex(
-        (column) => column.name === assignment.columnName
-      );
-      if (columnIndex === -1) {
-        throw new Error("Column not found");
-      }
+      const target = this.bindPathExpression(assignment.target);
       const value = this.bindExpression(assignment.value);
       return {
-        columnIndex,
+        target,
         value,
       };
     });
-    const condition =
-      ast.condition != null ? this.bindExpression(ast.condition) : undefined;
     return {
       type: "update_statement",
-      tableReference: {
-        type: "base_table_reference",
-        tableName: ast.tableName,
-        tableOid,
-        schema,
-      },
+      tableReference,
       assignments,
-      ...(condition != null ? { condition } : {}),
+      ...(ast.condition != null
+        ? { condition: this.bindExpression(ast.condition) }
+        : {}),
     };
   }
   async bindDelete(ast: DeleteStatementAST): Promise<BoundDeleteStatement> {
-    const tableOid = await this._catalog.getOidByTableName(ast.tableName);
-    const schema = await this._catalog.getSchemaByOid(tableOid);
-    this.scope = {
+    const tableReference = await this.bindTableReference({
       type: "base_table_reference",
       tableName: ast.tableName,
-      tableOid,
-      schema,
-    };
-    const condition =
-      ast.condition != null ? this.bindExpression(ast.condition) : undefined;
+    });
+    if (tableReference.type !== "base_table_reference") {
+      throw new Error("Unexpected table reference type");
+    }
+    this.scope = tableReference;
     return {
       type: "delete_statement",
-      tableReference: {
-        type: "base_table_reference",
-        tableName: ast.tableName,
-        tableOid,
-        schema,
-      },
-      ...(condition != null ? { condition } : {}),
+      tableReference,
+      ...(ast.condition != null
+        ? { condition: this.bindExpression(ast.condition) }
+        : {}),
     };
   }
   bindExpression(ast: ExpressionAST): BoundExpression {
@@ -232,9 +251,6 @@ export class Binder {
       }
       case "path": {
         return this.bindPathExpression(ast);
-      }
-      default: {
-        throw new Error("Unexpected expression type");
       }
     }
   }
@@ -258,7 +274,6 @@ export class Binder {
     };
   }
   bindLiteralExpression(ast: LiteralExpressionAST): BoundLiteralExpression {
-    // TODO: value
     return {
       type: "literal",
       value: ast.value,
@@ -268,12 +283,23 @@ export class Binder {
     if (this.scope === null) {
       throw new Error("Scope is null");
     }
+    if (this.scope.type === "select_elements") {
+      const expression = this.resolvePathExpressionFromSelectElements(
+        this.scope.selectElements,
+        ast.path
+      );
+      if (expression === null) {
+        throw new Error("Path not found");
+      }
+      return expression;
+    }
+
     const expression = this.resolvePathExpressionFromTableReference(
       this.scope,
       ast.path
     );
     if (expression == null) {
-      throw new Error("Expression is null");
+      throw new Error("Path not found");
     }
     return expression;
   }
@@ -291,8 +317,6 @@ export class Binder {
           table,
           path
         );
-      default:
-        throw new Error("Unexpected table reference type");
     }
   }
   resolvePathExpressionFromBaseTableReference(
@@ -319,7 +343,7 @@ export class Binder {
     if (directResolvedIndex !== -1) {
       return {
         type: "path",
-        path: [tableName, path[0]],
+        path: [...(tableName === "" ? [] : [tableName]), path[0]],
       };
     }
     return null;
@@ -351,6 +375,42 @@ export class Binder {
     table: BoundSubqueryTableReference,
     path: string[]
   ): BoundPathExpression | null {
-    throw new Error("Not implemented");
+    if (path.length !== 2) {
+      return null;
+    }
+    if (path[0] !== table.name) {
+      return null;
+    }
+    return this.resolvePathExpressionFromSelectElements(
+      table.query.selectElements,
+      path.slice(1)
+    );
+  }
+  resolvePathExpressionFromSelectElements(
+    selectElements: BoundSelectElement[],
+    path: string[]
+  ): BoundPathExpression | null {
+    const resolved = selectElements.find((selectElement) => {
+      const columnName =
+        selectElement.alias != null
+          ? selectElement.alias
+          : selectElement.expression.type === "path"
+          ? selectElement.expression.path[
+              selectElement.expression.path.length - 1
+            ]
+          : "";
+      return columnName === path[0];
+    });
+    if (resolved == null || resolved.expression.type !== "path") {
+      return null;
+    }
+    return {
+      type: "path",
+      path: [
+        resolved.alias != null
+          ? resolved.alias
+          : resolved.expression.path[resolved.expression.path.length - 1],
+      ],
+    };
   }
 }

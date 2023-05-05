@@ -281,8 +281,22 @@ describe("Binder", () => {
     it("should bind a select statement with order by and limit clause", async () => {
       const selectStatement: SelectStatementAST = {
         type: "select_statement",
-        isAsterisk: true,
-        selectElements: [],
+        isAsterisk: false,
+        selectElements: [
+          {
+            expression: {
+              type: "path",
+              path: ["id"],
+            },
+            alias: "_id",
+          },
+          {
+            expression: {
+              type: "path",
+              path: ["name"],
+            },
+          },
+        ],
         tableReference: {
           type: "base_table_reference",
           tableName: "foo",
@@ -292,7 +306,7 @@ describe("Binder", () => {
             {
               expression: {
                 type: "path",
-                path: ["id"],
+                path: ["_id"],
               },
               direction: "ASC",
             },
@@ -306,14 +320,31 @@ describe("Binder", () => {
           ],
         },
         limit: {
-          count: 1,
+          count: {
+            type: "literal",
+            value: 1,
+          },
         },
       };
       const boundStatement = await binder.bind(selectStatement);
       expect(boundStatement).toEqual({
         type: "select_statement",
-        isAsterisk: true,
-        selectElements: [],
+        isAsterisk: false,
+        selectElements: [
+          {
+            expression: {
+              type: "path",
+              path: ["foo", "id"],
+            },
+            alias: "_id",
+          },
+          {
+            expression: {
+              type: "path",
+              path: ["foo", "name"],
+            },
+          },
+        ],
         tableReference: {
           type: "base_table_reference",
           tableName: "foo",
@@ -328,21 +359,24 @@ describe("Binder", () => {
             {
               expression: {
                 type: "path",
-                path: ["foo", "id"],
+                path: ["_id"],
               },
               direction: "ASC",
             },
             {
               expression: {
                 type: "path",
-                path: ["foo", "name"],
+                path: ["name"],
               },
               direction: "DESC",
             },
           ],
         },
         limit: {
-          count: 1,
+          count: {
+            type: "literal",
+            value: 1,
+          },
         },
       });
     });
@@ -391,7 +425,10 @@ describe("Binder", () => {
         tableName: "foo",
         assignments: [
           {
-            columnName: "name",
+            target: {
+              type: "path",
+              path: ["name"],
+            },
             value: {
               type: "literal",
               value: "qux",
@@ -425,7 +462,10 @@ describe("Binder", () => {
         },
         assignments: [
           {
-            columnIndex: 1,
+            target: {
+              type: "path",
+              path: ["foo", "name"],
+            },
             value: {
               type: "literal",
               value: "qux",

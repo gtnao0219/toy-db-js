@@ -2,15 +2,10 @@ import { Schema } from "../catalog/schema";
 import {
   BinaryOperator,
   Direction,
-  ExpressionAST,
   JoinType,
-  LimitAST,
   UnaryOperator,
 } from "../parser/ast";
 import { LiteralValue } from "../parser/token";
-import { TupleWithRID } from "../storage/table/table_heap";
-import { Tuple } from "../storage/table/tuple";
-import { Value } from "../type/value";
 
 // statement
 export type BoundStatement =
@@ -36,7 +31,7 @@ export type BoundSelectStatement = {
   tableReference: BoundTableReference;
   condition?: BoundExpression;
   orderBy?: BoundOrderBy;
-  limit?: LimitAST;
+  limit?: BoundLimit;
 };
 export type BoundSelectElement = {
   expression: BoundExpression;
@@ -46,8 +41,11 @@ export type BoundOrderBy = {
   sortKeys: BoundSortKey[];
 };
 export type BoundSortKey = {
-  expression: BoundExpression;
+  expression: BoundPathExpression;
   direction: Direction;
+};
+export type BoundLimit = {
+  count: BoundExpression;
 };
 export type BoundInsertStatement = {
   type: "insert_statement";
@@ -61,8 +59,7 @@ export type BoundUpdateStatement = {
   condition?: BoundExpression;
 };
 export type BoundAssignment = {
-  // TODO: bound expression
-  columnIndex: number;
+  target: BoundPathExpression;
   value: BoundExpression;
 };
 export type BoundDeleteStatement = {

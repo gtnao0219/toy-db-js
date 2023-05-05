@@ -8,7 +8,6 @@ import {
 import { Schema } from "../catalog/schema";
 import { BinaryOperator, UnaryOperator } from "../parser/ast";
 import { LiteralValue } from "../parser/token";
-import { TupleWithRID } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
 import { BooleanValue } from "../type/boolean_value";
 import { IntegerValue } from "../type/integer_value";
@@ -62,7 +61,7 @@ export function planExpression(
   }
 }
 
-function planBinaryOperationExpression(
+export function planBinaryOperationExpression(
   expression: BoundBinaryOperationExpression,
   children: PlanNode[]
 ): [string, BinaryOperationExpressionPlanNode] {
@@ -78,7 +77,7 @@ function planBinaryOperationExpression(
     },
   ];
 }
-function planUnaryOperationExpression(
+export function planUnaryOperationExpression(
   expression: BoundUnaryOperationExpression,
   children: PlanNode[]
 ): [string, UnaryOperationExpressionPlanNode] {
@@ -92,7 +91,7 @@ function planUnaryOperationExpression(
     },
   ];
 }
-function planLiteralExpression(
+export function planLiteralExpression(
   expression: BoundLiteralExpression,
   children: PlanNode[]
 ): [string, LiteralExpressionPlanNode] {
@@ -104,7 +103,7 @@ function planLiteralExpression(
     },
   ];
 }
-function planPathExpression(
+export function planPathExpression(
   expression: BoundPathExpression,
   children: PlanNode[]
 ): [string, PathExpressionPlanNode] {

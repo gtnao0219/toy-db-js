@@ -1,6 +1,6 @@
 import { Schema } from "../catalog/schema";
 import { Direction } from "../parser/ast";
-import { ExpressionPlanNode } from "./expression_plan";
+import { ExpressionPlanNode, PathExpressionPlanNode } from "./expression_plan";
 
 export type PlanNode =
   | SeqScanPlanNode
@@ -39,12 +39,12 @@ export type SortPlanNode = {
   child: PlanNode;
 };
 export type SortKeyPlanNode = {
-  expression: ExpressionPlanNode;
+  expression: PathExpressionPlanNode;
   direction: Direction;
 };
 export type LimitPlanNode = {
   type: "limit";
-  count: number;
+  count: ExpressionPlanNode;
   outputSchema: Schema;
   child: PlanNode;
 };
@@ -62,8 +62,7 @@ export type UpdatePlanNode = {
   child: PlanNode;
 };
 export type AssignmentPlanNode = {
-  // TODO:
-  columnIndex: number;
+  target: PathExpressionPlanNode;
   value: ExpressionPlanNode;
 };
 export type DeletePlanNode = {

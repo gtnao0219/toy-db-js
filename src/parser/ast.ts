@@ -64,12 +64,11 @@ export type OrderByAST = {
 };
 export type Direction = "ASC" | "DESC";
 export type SortKeyAST = {
-  expression: ExpressionAST;
+  expression: PathExpressionAST;
   direction: Direction;
 };
 export type LimitAST = {
-  // TODO: support expression
-  count: number;
+  count: ExpressionAST;
 };
 export type InsertStatementAST = {
   type: "insert_statement";
@@ -89,8 +88,7 @@ export type UpdateStatementAST = {
   condition?: ExpressionAST;
 };
 export type AssignmentAST = {
-  // TODO: support path expression
-  columnName: string;
+  target: PathExpressionAST;
   value: ExpressionAST;
 };
 export type BeginStatementAST = {

@@ -1,7 +1,6 @@
 import {
   BoundDeleteStatement,
   BoundInsertStatement,
-  BoundSelectElement,
   BoundSelectStatement,
   BoundStatement,
   BoundTableReference,
@@ -10,7 +9,12 @@ import {
 import { Column } from "../catalog/column";
 import { Schema } from "../catalog/schema";
 import { Type } from "../type/type";
-import { UNNAMED, inferType, planExpression } from "./expression_plan";
+import {
+  UNNAMED,
+  inferType,
+  planExpression,
+  planPathExpression,
+} from "./expression_plan";
 import {
   DeletePlanNode,
   InsertPlanNode,
@@ -50,7 +54,7 @@ function planSelectStatement(statement: BoundSelectStatement): PlanNode {
     child = {
       type: "sort",
       sortKeys: statement.orderBy.sortKeys.map((sortKey) => {
-        const [_, expression] = planExpression(sortKey.expression, [child]);
+        const [_, expression] = planPathExpression(sortKey.expression, [child]);
         return {
           expression,
           direction: sortKey.direction,
@@ -61,9 +65,10 @@ function planSelectStatement(statement: BoundSelectStatement): PlanNode {
     };
   }
   if (statement.limit != null) {
+    const [_, count] = planExpression(statement.limit.count, [child]);
     child = {
       type: "limit",
-      count: statement.limit.count,
+      count,
       outputSchema: child.outputSchema,
       child,
     };
@@ -96,9 +101,10 @@ function planUpdateStatement(statement: BoundUpdateStatement): UpdatePlanNode {
     type: "update",
     tableOid: statement.tableReference.tableOid,
     assignments: statement.assignments.map((assignment) => {
-      const [_, value] = planExpression(assignment.value, [child]);
+      const [_, target] = planPathExpression(assignment.target, [child]);
+      const [__, value] = planExpression(assignment.value, [child]);
       return {
-        columnIndex: assignment.columnIndex,
+        target,
         value,
       };
     }),

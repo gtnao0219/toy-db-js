@@ -114,12 +114,9 @@ export class Parser {
     }
     this.consumeKeywordOrError("FROM");
     const tableReference = this.tableReference();
-    let condition: ExpressionAST | undefined = undefined;
-    if (this.consumeKeyword("WHERE")) {
-      condition = this.expression();
-    }
-    const orderBy = this.orderBy() ?? undefined;
-    const limit = this.limit() ?? undefined;
+    const condition = this.where();
+    const orderBy = this.orderBy();
+    const limit = this.limit();
     return {
       type: "select_statement",
       isAsterisk,
@@ -203,6 +200,12 @@ export class Parser {
       condition,
     };
   }
+  private where(): ExpressionAST | null {
+    if (this.consumeKeyword("WHERE")) {
+      return this.expression();
+    }
+    return null;
+  }
   private orderBy(): OrderByAST | null {
     if (!(this.consumeKeyword("ORDER") && this.consumeKeyword("BY"))) {
       return null;
@@ -218,6 +221,9 @@ export class Parser {
   }
   private sortKey(): SortKeyAST {
     const expression = this.expression();
+    if (expression.type !== "path") {
+      throw new Error("Expected path");
+    }
     let direction: "ASC" | "DESC" = "ASC";
     if (this.consumeKeyword("ASC")) {
       direction = "ASC";
@@ -230,16 +236,12 @@ export class Parser {
     };
   }
   private limit(): LimitAST | null {
-    if (!this.consumeKeyword("LIMIT")) {
-      return null;
+    if (this.consumeKeyword("LIMIT")) {
+      return {
+        count: this.expression(),
+      };
     }
-    const value = this.consumeLiteralOrError();
-    if (typeof value !== "number") {
-      throw new Error("Expected number");
-    }
-    return {
-      count: value,
-    };
+    return null;
   }
   private insertStatement(): InsertStatementAST {
     this.consumeKeywordOrError("INSERT");
@@ -267,10 +269,7 @@ export class Parser {
     while (this.consume("comma")) {
       assignments.push(this.assignment());
     }
-    let condition: ExpressionAST | undefined = undefined;
-    if (this.consumeKeyword("WHERE")) {
-      condition = this.expression();
-    }
+    const condition = this.where();
     return {
       type: "update_statement",
       tableName,
@@ -279,11 +278,17 @@ export class Parser {
     };
   }
   private assignment(): AssignmentAST {
-    const columnName = this.consumeIdentifierOrError();
-    this.consumeOrError("equal");
-    const value = this.expression();
+    const expression = this.expression();
+    if (expression.type !== "binary_operation" || expression.operator !== "=") {
+      throw new Error("Expected assignment");
+    }
+    const target = expression.left;
+    const value = expression.right;
+    if (target.type !== "path") {
+      throw new Error("Expected path");
+    }
     return {
-      columnName,
+      target,
       value,
     };
   }
@@ -291,10 +296,7 @@ export class Parser {
     this.consumeKeywordOrError("DELETE");
     this.consumeKeywordOrError("FROM");
     const tableName = this.consumeIdentifierOrError();
-    let condition: ExpressionAST | undefined = undefined;
-    if (this.consumeKeyword("WHERE")) {
-      condition = this.expression();
-    }
+    const condition = this.where();
     return {
       type: "delete_statement",
       tableName,

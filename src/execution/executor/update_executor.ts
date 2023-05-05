@@ -37,7 +37,7 @@ export class UpdateExecutor extends Executor {
       for (const assignment of this._planNode.assignments) {
         const emptySchema = new Schema([]);
         const emptyTuple = new Tuple(emptySchema, []);
-        newTuple.values[assignment.columnIndex] = evaluate(
+        newTuple.values[assignment.target.columnIndex] = evaluate(
           assignment.value,
           emptyTuple,
           emptySchema
