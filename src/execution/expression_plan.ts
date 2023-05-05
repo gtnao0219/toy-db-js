@@ -9,6 +9,7 @@ import { Schema } from "../catalog/schema";
 import { BinaryOperator, UnaryOperator } from "../parser/ast";
 import { LiteralValue } from "../parser/token";
 import { TupleWithRID } from "../storage/table/table_heap";
+import { Tuple } from "../storage/table/tuple";
 import { BooleanValue } from "../type/boolean_value";
 import { IntegerValue } from "../type/integer_value";
 import { Type } from "../type/type";
@@ -112,8 +113,6 @@ function planPathExpression(
       (column) => column.name === expression.path.join(".")
     );
     if (index === -1) {
-      console.log(children[0].outputSchema.columns);
-      console.log(expression.path);
       throw new Error("Not found");
     }
     return [
@@ -164,7 +163,7 @@ function planPathExpression(
 
 export function evaluate(
   expression: ExpressionPlanNode,
-  tuple: TupleWithRID,
+  tuple: Tuple,
   schema: Schema
 ): Value {
   switch (expression.type) {
@@ -182,7 +181,7 @@ export function evaluate(
 }
 function evaluateBinaryOperationExpression(
   expression: BinaryOperationExpressionPlanNode,
-  tuple: TupleWithRID,
+  tuple: Tuple,
   schema: Schema
 ): Value {
   const left = evaluate(expression.left, tuple, schema);
@@ -214,7 +213,7 @@ function evaluateBinaryOperationExpression(
 }
 function evaluateUnaryOperationExpression(
   expression: UnaryOperationExpressionPlanNode,
-  tuple: TupleWithRID,
+  tuple: Tuple,
   schema: Schema
 ): Value {
   const operand = evaluate(expression.operand, tuple, schema);
@@ -225,7 +224,7 @@ function evaluateUnaryOperationExpression(
 }
 function evaluateLiteralExpression(
   expression: LiteralExpressionPlanNode,
-  tuple: TupleWithRID,
+  tuple: Tuple,
   schema: Schema
 ): Value {
   if (typeof expression.value === "boolean") {
@@ -244,10 +243,10 @@ function evaluateLiteralExpression(
 }
 function evaluatePathExpression(
   expression: PathExpressionPlanNode,
-  tuple: TupleWithRID,
+  tuple: Tuple,
   schema: Schema
 ): Value {
-  return tuple.tuple.values[expression.columnIndex];
+  return tuple.values[expression.columnIndex];
 }
 
 export function inferType(expression: ExpressionPlanNode): Type {

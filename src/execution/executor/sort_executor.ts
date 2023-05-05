@@ -1,5 +1,6 @@
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
+import { evaluate } from "../expression_plan";
 import { SortPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
@@ -22,12 +23,19 @@ export class SortExecutor extends Executor {
     }
     this.childTuples = this.childTuples.sort((a, b) => {
       for (const sortKey of this._planNode.sortKeys) {
-        const aVal = a.tuple.values[sortKey.columnIndex];
-        const bVal = b.tuple.values[sortKey.columnIndex];
-        // TODO:
-        if (aVal.value < bVal.value) {
+        const aEvaluated = evaluate(
+          sortKey.expression,
+          a.tuple,
+          this._child.outputSchema()
+        );
+        const bEvaluated = evaluate(
+          sortKey.expression,
+          b.tuple,
+          this._child.outputSchema()
+        );
+        if (aEvaluated.lessThan(bEvaluated)) {
           return sortKey.direction === "ASC" ? -1 : 1;
-        } else if (aVal.value > bVal.value) {
+        } else if (aEvaluated.greaterThanEqual(bEvaluated)) {
           return sortKey.direction === "ASC" ? 1 : -1;
         }
       }

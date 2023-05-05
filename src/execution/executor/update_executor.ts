@@ -1,6 +1,9 @@
+import { Schema } from "../../catalog/schema";
 import { LockMode } from "../../concurrency/lock_manager";
 import { TableHeap, TupleWithRID } from "../../storage/table/table_heap";
+import { Tuple } from "../../storage/table/tuple";
 import { ExecutorContext } from "../executor_context";
+import { evaluate } from "../expression_plan";
 import { UpdatePlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
@@ -32,7 +35,13 @@ export class UpdateExecutor extends Executor {
     while ((tuple = await this._child.next()) !== null) {
       const newTuple = tuple.tuple;
       for (const assignment of this._planNode.assignments) {
-        newTuple.values[assignment.columnIndex] = assignment.value;
+        const emptySchema = new Schema([]);
+        const emptyTuple = new Tuple(emptySchema, []);
+        newTuple.values[assignment.columnIndex] = evaluate(
+          assignment.value,
+          emptyTuple,
+          emptySchema
+        );
       }
       await this._executorContext.lockManager.lockRow(
         this._executorContext.transaction,

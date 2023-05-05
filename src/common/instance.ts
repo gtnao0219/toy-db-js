@@ -106,6 +106,7 @@ export class Instance implements Debuggable {
       executorContext,
       planNode
     );
+    console.log("tuples", tuples);
     if (transactionId == null) {
       this._transactionManager.commit(transaction);
     }

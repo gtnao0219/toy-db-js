@@ -1,3 +1,4 @@
+import { Schema } from "../../catalog/schema";
 import { LockMode } from "../../concurrency/lock_manager";
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { Tuple } from "../../storage/table/tuple";
@@ -28,7 +29,13 @@ export class InsertExecutor extends Executor {
     const rid = await tableHeap.insertTuple(
       new Tuple(
         tableHeap.schema,
-        this._planNode.values.map((v) => evaluate(v))
+        this._planNode.values.map((v) => {
+          // TODO:
+          const emptySchema = new Schema([]);
+          const emptyTuple = new Tuple(emptySchema, []);
+          const evaluated = evaluate(v, emptyTuple, emptySchema);
+          return evaluated;
+        })
       ),
       this._executorContext.transaction
     );

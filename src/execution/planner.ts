@@ -45,7 +45,7 @@ function planSelectStatement(statement: BoundSelectStatement): PlanNode {
       child,
     };
   }
-  child = planProject(statement.selectElements, child);
+  child = planProject(statement, child);
   if (statement.orderBy != null) {
     child = {
       type: "sort",
@@ -145,20 +145,39 @@ function planTableReference(tableReference: BoundTableReference): PlanNode {
   }
 }
 function planProject(
-  selectElements: BoundSelectElement[],
+  selectStatement: BoundSelectStatement,
   child: PlanNode
 ): ProjectPlanNode {
-  const names: string[] = [];
-  const selectElementsPlanNode = selectElements.map((selectElement) => {
-    const [name, expression] = planExpression(selectElement.expression, [
-      child,
-    ]);
-    names.push(name);
+  if (selectStatement.isAsterisk) {
     return {
-      expression: expression,
-      alias: selectElement.alias,
+      type: "project",
+      selectElements: child.outputSchema.columns.map((column, index) => {
+        return {
+          expression: {
+            type: "path",
+            tupleIndex: 0,
+            columnIndex: index,
+            dataType: column.type,
+          },
+        };
+      }),
+      outputSchema: child.outputSchema,
+      child,
     };
-  });
+  }
+  const names: string[] = [];
+  const selectElementsPlanNode = selectStatement.selectElements.map(
+    (selectElement) => {
+      const [name, expression] = planExpression(selectElement.expression, [
+        child,
+      ]);
+      names.push(name);
+      return {
+        expression: expression,
+        alias: selectElement.alias,
+      };
+    }
+  );
   let unnamedCount = 0;
   return {
     type: "project",
