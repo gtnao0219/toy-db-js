@@ -41,16 +41,22 @@ export class VarcharValue extends VariableValue {
         return new VarcharValue(this._value.toString());
     }
   }
-  add(right: Value): Value {
-    if (!(right instanceof VarcharValue)) {
-      throw new Error(`Cannot add ${this.type()} and ${right.type()}`);
-    }
-    return new VarcharValue(this._value + right.value);
+  performEqual(right: VarcharValue): BooleanValue {
+    return new BooleanValue(this._value === right.value);
   }
-  subtract(right: Value): Value {
-    if (!(right instanceof VarcharValue)) {
-      throw new Error(`Cannot subtract ${this.type()} and ${right.type()}`);
-    }
-    return new VarcharValue(this._value.replace(right.value, ""));
+  performNotEqual(right: VarcharValue): BooleanValue {
+    return new BooleanValue(this._value !== right.value);
+  }
+  performLessThan(right: VarcharValue): BooleanValue {
+    return new BooleanValue(this._value < right.value);
+  }
+  performGreaterThan(right: VarcharValue): BooleanValue {
+    return new BooleanValue(this._value > right.value);
+  }
+  performLessThanEqual(right: VarcharValue): BooleanValue {
+    return new BooleanValue(this._value <= right.value);
+  }
+  performGreaterThanEqual(right: VarcharValue): BooleanValue {
+    return new BooleanValue(this._value >= right.value);
   }
 }

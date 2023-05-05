@@ -1,23 +1,25 @@
 import { Schema } from "../catalog/schema";
 import {
   BinaryOperator,
+  Direction,
   ExpressionAST,
   JoinType,
   LimitAST,
-  OrderByAST,
-  SelectElementAST,
   UnaryOperator,
 } from "../parser/ast";
 import { LiteralValue } from "../parser/token";
+import { TupleWithRID } from "../storage/table/table_heap";
+import { Tuple } from "../storage/table/tuple";
+import { Value } from "../type/value";
 
 // statement
 export type BoundStatement =
   | BoundCreateTableStatement
   | BoundDropTableStatement
+  | BoundSelectStatement
   | BoundInsertStatement
-  | BoundDeleteStatement
   | BoundUpdateStatement
-  | BoundSelectStatement;
+  | BoundDeleteStatement;
 export type BoundCreateTableStatement = {
   type: "create_table_statement";
   tableName: string;
@@ -25,52 +27,57 @@ export type BoundCreateTableStatement = {
 };
 export type BoundDropTableStatement = {
   type: "drop_table_statement";
-  tableOid: number;
-};
-export type BoundInsertStatement = {
-  type: "insert_statement";
-  tableOid: number;
-  schema: Schema;
-  values: ExpressionAST[];
-};
-export type BoundDeleteStatement = {
-  type: "delete_statement";
-  tableOid: number;
-  schema: Schema;
-  condition?: ExpressionAST;
-};
-export type BoundUpdateStatement = {
-  type: "update_statement";
-  tableOid: number;
-  schema: Schema;
-  assignments: BoundAssignment[];
-  condition?: ExpressionAST;
-};
-export type BoundAssignment = {
-  columnIndex: number;
-  value: ExpressionAST;
+  tableReference: BoundBaseTableReference;
 };
 export type BoundSelectStatement = {
   type: "select_statement";
   isAsterisk: boolean;
   selectElements: BoundSelectElement[];
   tableReference: BoundTableReference;
-  condition?: ExpressionAST;
-  orderBy?: OrderByAST;
+  condition?: BoundExpression;
+  orderBy?: BoundOrderBy;
   limit?: LimitAST;
 };
 export type BoundSelectElement = {
   expression: BoundExpression;
   alias?: string;
 };
+export type BoundOrderBy = {
+  sortKeys: BoundSortKey[];
+};
+export type BoundSortKey = {
+  expression: BoundExpression;
+  direction: Direction;
+};
+export type BoundInsertStatement = {
+  type: "insert_statement";
+  tableReference: BoundBaseTableReference;
+  values: BoundExpression[];
+};
+export type BoundUpdateStatement = {
+  type: "update_statement";
+  tableReference: BoundBaseTableReference;
+  assignments: BoundAssignment[];
+  condition?: BoundExpression;
+};
+export type BoundAssignment = {
+  // TODO: bound expression
+  columnIndex: number;
+  value: BoundExpression;
+};
+export type BoundDeleteStatement = {
+  type: "delete_statement";
+  tableReference: BoundBaseTableReference;
+  condition?: BoundExpression;
+};
 
 // table reference
 export type BoundTableReference =
-  | BoundSimpleTableReference
+  | BoundBaseTableReference
   | BoundJoinTableReference
   | BoundSubqueryTableReference;
-export type BoundSimpleTableReference = {
-  type: "simple_table_reference";
+export type BoundBaseTableReference = {
+  type: "base_table_reference";
   tableName: string;
   alias?: string;
   tableOid: number;
@@ -81,7 +88,7 @@ export type BoundJoinTableReference = {
   joinType: JoinType;
   left: BoundTableReference;
   right: BoundTableReference;
-  condition: ExpressionAST;
+  condition: BoundExpression;
 };
 export type BoundSubqueryTableReference = {
   type: "subquery_table_reference";
@@ -91,28 +98,26 @@ export type BoundSubqueryTableReference = {
 
 // expression;
 export type BoundExpression =
-  | BoundBinaryOperatorExpression
-  | BoundUnaryOperatorExpression
+  | BoundBinaryOperationExpression
+  | BoundUnaryOperationExpression
   | BoundLiteralExpression
   | BoundPathExpression;
-export type BoundBinaryOperatorExpression = {
-  type: "binary_operator_expression";
+export type BoundBinaryOperationExpression = {
+  type: "binary_operation";
   operator: BinaryOperator;
   left: BoundExpression;
   right: BoundExpression;
 };
-export type BoundUnaryOperatorExpression = {
-  type: "unary_operator_expression";
+export type BoundUnaryOperationExpression = {
+  type: "unary_operation";
   operator: UnaryOperator;
   operand: BoundExpression;
 };
 export type BoundPathExpression = {
-  type: "path_expression";
+  type: "path";
   path: string[];
 };
 export type BoundLiteralExpression = {
-  type: "literal_expression";
+  type: "literal";
   value: LiteralValue;
 };
-
-export function evaluate(expression: ExpressionAST): LiteralValue {}

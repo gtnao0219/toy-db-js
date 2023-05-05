@@ -8,10 +8,10 @@ export class UpdateExecutor extends Executor {
   private tableHeap: TableHeap | null = null;
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: UpdatePlanNode,
+    protected _planNode: UpdatePlanNode,
     private _child: Executor
   ) {
-    super(_executorContext, ExecutorType.UPDATE);
+    super(_executorContext, _planNode, ExecutorType.UPDATE);
   }
   async init(): Promise<void> {
     await this._child.init();

@@ -2,15 +2,16 @@ import { LockMode } from "../../concurrency/lock_manager";
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { Tuple } from "../../storage/table/tuple";
 import { ExecutorContext } from "../executor_context";
+import { evaluate } from "../expression_plan";
 import { InsertPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class InsertExecutor extends Executor {
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: InsertPlanNode
+    protected _planNode: InsertPlanNode
   ) {
-    super(_executorContext, ExecutorType.INSERT);
+    super(_executorContext, _planNode, ExecutorType.INSERT);
   }
   async init(): Promise<void> {
     // this._child.init();
@@ -25,7 +26,10 @@ export class InsertExecutor extends Executor {
       this._planNode.tableOid
     );
     const rid = await tableHeap.insertTuple(
-      new Tuple(tableHeap.schema, this._planNode.values),
+      new Tuple(
+        tableHeap.schema,
+        this._planNode.values.map((v) => evaluate(v))
+      ),
       this._executorContext.transaction
     );
     await this._executorContext.lockManager.lockRow(

@@ -1,6 +1,6 @@
-import { BoundAssignment } from "../binder/bound";
 import { Schema } from "../catalog/schema";
-import { ExpressionAST, SelectElementAST, SortKeyAST } from "../parser/ast";
+import { Direction } from "../parser/ast";
+import { ExpressionPlanNode } from "./expression_plan";
 
 export type PlanNode =
   | SeqScanPlanNode
@@ -9,49 +9,66 @@ export type PlanNode =
   | SortPlanNode
   | LimitPlanNode
   | InsertPlanNode
-  | DeletePlanNode
-  | UpdatePlanNode;
+  | UpdatePlanNode
+  | DeletePlanNode;
 export type SeqScanPlanNode = {
   type: "seq_scan";
   tableOid: number;
-  schema: Schema;
+  outputSchema: Schema;
 };
 export type FilterPlanNode = {
   type: "filter";
-  condition: ExpressionAST;
+  condition: ExpressionPlanNode;
+  outputSchema: Schema;
   child: PlanNode;
 };
 export type ProjectPlanNode = {
   type: "project";
-  selectElements: SelectElementAST[];
+  selectElements: SelectElementPlanNode[];
+  outputSchema: Schema;
   child: PlanNode;
+};
+export type SelectElementPlanNode = {
+  expression: ExpressionPlanNode;
+  alias?: string;
 };
 export type SortPlanNode = {
   type: "sort";
-  sortKeys: SortKeyAST[];
+  sortKeys: SortKeyPlanNode[];
+  outputSchema: Schema;
   child: PlanNode;
+};
+export type SortKeyPlanNode = {
+  expression: ExpressionPlanNode;
+  direction: Direction;
 };
 export type LimitPlanNode = {
   type: "limit";
   count: number;
+  outputSchema: Schema;
   child: PlanNode;
 };
 export type InsertPlanNode = {
   type: "insert";
   tableOid: number;
-  schema: Schema;
-  values: ExpressionAST[];
-};
-export type DeletePlanNode = {
-  type: "delete";
-  tableOid: number;
-  schema: Schema;
-  child: PlanNode;
+  values: ExpressionPlanNode[];
+  outputSchema: Schema;
 };
 export type UpdatePlanNode = {
   type: "update";
   tableOid: number;
-  schema: Schema;
-  assignments: BoundAssignment[];
+  assignments: AssignmentPlanNode[];
+  outputSchema: Schema;
+  child: PlanNode;
+};
+export type AssignmentPlanNode = {
+  // TODO:
+  columnIndex: number;
+  value: ExpressionPlanNode;
+};
+export type DeletePlanNode = {
+  type: "delete";
+  tableOid: number;
+  outputSchema: Schema;
   child: PlanNode;
 };

@@ -12,9 +12,9 @@ export class SeqScanExecutor extends Executor {
 
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: SeqScanPlanNode
+    protected _planNode: SeqScanPlanNode
   ) {
-    super(_executorContext, ExecutorType.SEQ_SCAN);
+    super(_executorContext, _planNode, ExecutorType.SEQ_SCAN);
   }
   async init(): Promise<void> {
     this._executorContext.lockManager.lockTable(

@@ -1,3 +1,4 @@
+import { evaluate } from "../../binder/bound";
 import { Column } from "../../catalog/column";
 import { Schema } from "../../catalog/schema";
 import { TupleWithRID } from "../../storage/table/table_heap";
@@ -7,16 +8,16 @@ import { IntegerValue } from "../../type/integer_value";
 import { Type } from "../../type/type";
 import { VarcharValue } from "../../type/varchar_value";
 import { ExecutorContext } from "../executor_context";
-import { ProjectionPlanNode } from "../plan/projection_plan";
+import { ProjectPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class ProjectionExecutor extends Executor {
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: ProjectionPlanNode,
+    protected _planNode: ProjectPlanNode,
     private _child: Executor
   ) {
-    super(_executorContext, ExecutorType.PROJECTION);
+    super(_executorContext, _planNode, ExecutorType.PROJECTION);
   }
   async init(): Promise<void> {
     await this._child.init();
@@ -26,8 +27,12 @@ export class ProjectionExecutor extends Executor {
     if (tuple === null) {
       return null;
     }
-    const rawValues = this._planNode.selectList.map((expr) => {
-      return expr.evaluate(tuple.tuple);
+    const rawValues = this._planNode.selectElements.map((selectElement) => {
+      return evaluate(
+        selectElement.expression,
+        tuple,
+        this._child.outputSchema()
+      );
     });
     const newTuple = new Tuple(
       new Schema(

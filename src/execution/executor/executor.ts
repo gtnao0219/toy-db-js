@@ -1,5 +1,7 @@
+import { Schema } from "../../catalog/schema";
 import { TupleWithRID } from "../../storage/table/table_heap";
 import { ExecutorContext } from "../executor_context";
+import { PlanNode } from "../plan";
 
 export enum ExecutorType {
   INSERT,
@@ -14,6 +16,7 @@ export enum ExecutorType {
 export abstract class Executor {
   constructor(
     protected _executorContext: ExecutorContext,
+    protected _planNode: PlanNode,
     protected _executorType: ExecutorType
   ) {}
   get executorType(): ExecutorType {
@@ -21,4 +24,7 @@ export abstract class Executor {
   }
   abstract init(): Promise<void>;
   abstract next(): Promise<TupleWithRID | null>;
+  outputSchema(): Schema {
+    return this._planNode.outputSchema;
+  }
 }

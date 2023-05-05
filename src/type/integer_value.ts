@@ -55,16 +55,10 @@ export class IntegerValue extends InlinedValue {
   performGreaterThan(right: IntegerValue): BooleanValue {
     return new BooleanValue(this._value > right.value);
   }
-  performLessThanOrEqual(right: IntegerValue): BooleanValue {
+  performLessThanEqual(right: IntegerValue): BooleanValue {
     return new BooleanValue(this._value <= right.value);
   }
-  performGreaterThanOrEqual(right: IntegerValue): BooleanValue {
+  performGreaterThanEqual(right: IntegerValue): BooleanValue {
     return new BooleanValue(this._value >= right.value);
-  }
-  performAnd(right: IntegerValue): BooleanValue {
-    return new BooleanValue(this._value !== 0 && right.value !== 0);
-  }
-  performOr(right: IntegerValue): BooleanValue {
-    return new BooleanValue(this._value !== 0 || right.value !== 0);
   }
 }

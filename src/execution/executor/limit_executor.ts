@@ -8,10 +8,10 @@ export class LimitExecutor extends Executor {
   private childTupleIndex = 0;
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: LimitPlanNode,
+    protected _planNode: LimitPlanNode,
     private _child: Executor
   ) {
-    super(_executorContext, ExecutorType.LIMIT);
+    super(_executorContext, _planNode, ExecutorType.LIMIT);
   }
   async init(): Promise<void> {
     await this._child.init();

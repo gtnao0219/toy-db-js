@@ -68,6 +68,7 @@ export type SortKeyAST = {
   direction: Direction;
 };
 export type LimitAST = {
+  // TODO: support expression
   count: number;
 };
 export type InsertStatementAST = {

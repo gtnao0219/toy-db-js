@@ -8,10 +8,10 @@ export class SortExecutor extends Executor {
   private childTupleIndex = 0;
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: SortPlanNode,
+    protected _planNode: SortPlanNode,
     private _child: Executor
   ) {
-    super(_executorContext, ExecutorType.SORT);
+    super(_executorContext, _planNode, ExecutorType.SORT);
   }
   async init(): Promise<void> {
     await this._child.init();

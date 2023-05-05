@@ -8,10 +8,10 @@ export class DeleteExecutor extends Executor {
   private tableHeap: TableHeap | null = null;
   constructor(
     protected _executorContext: ExecutorContext,
-    private _planNode: DeletePlanNode,
+    protected _planNode: DeletePlanNode,
     private _child: Executor
   ) {
-    super(_executorContext, ExecutorType.INSERT);
+    super(_executorContext, _planNode, ExecutorType.INSERT);
   }
   async init(): Promise<void> {
     await this._child.init();

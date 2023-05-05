@@ -30,7 +30,12 @@ const COLUMN_INFORMATION_SCHEMA_SCHEMA = new Schema([
   new Column("ordinary_position", Type.INTEGER),
 ]);
 
-export class Catalog {
+export interface ICatalog {
+  getOidByTableName(tableName: string): Promise<number>;
+  getSchemaByOid(oid: number): Promise<Schema>;
+}
+
+export class Catalog implements ICatalog {
   constructor(private _bufferPoolManager: BufferPoolManager) {}
   // TODO: Refactor
   async nextOid(): Promise<number> {

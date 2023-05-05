@@ -34,10 +34,31 @@ export class BooleanValue extends InlinedValue {
         return new VarcharValue(this._value.toString());
     }
   }
+  performEqual(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value === right.value);
+  }
+  performNotEqual(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value !== right.value);
+  }
+  performLessThan(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value < right.value);
+  }
+  performGreaterThan(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value > right.value);
+  }
+  performLessThanEqual(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value <= right.value);
+  }
+  performGreaterThanEqual(right: BooleanValue): BooleanValue {
+    return new BooleanValue(this._value >= right.value);
+  }
   performAnd(right: BooleanValue): BooleanValue {
     return new BooleanValue(this._value && right.value);
   }
   performOr(right: BooleanValue): BooleanValue {
     return new BooleanValue(this._value || right.value);
+  }
+  performNot(): BooleanValue {
+    return new BooleanValue(!this._value);
   }
 }
