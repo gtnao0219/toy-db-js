@@ -33,7 +33,7 @@ export class SortExecutor extends Executor {
           b.tuple,
           this._child.outputSchema()
         );
-        if (aEvaluated.lessThan(bEvaluated)) {
+        if (aEvaluated.lessThan(bEvaluated).value) {
           return sortKey.direction === "ASC" ? -1 : 1;
         } else if (aEvaluated.greaterThanEqual(bEvaluated)) {
           return sortKey.direction === "ASC" ? 1 : -1;
@@ -41,10 +41,6 @@ export class SortExecutor extends Executor {
       }
       return 0;
     });
-    console.log(
-      "sorted tuples",
-      this.childTuples.map((t) => t.tuple.values)
-    );
   }
   async next(): Promise<TupleWithRID | null> {
     return this.childTuples[this.childTupleIndex++] ?? null;
