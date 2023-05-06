@@ -147,7 +147,7 @@ function planTableReference(tableReference: BoundTableReference): PlanNode {
     case "join_table_reference":
       throw new Error("Not implemented");
     case "subquery_table_reference":
-      throw new Error("Not implemented");
+      return planSelectStatement(tableReference.query);
   }
 }
 function planProject(
