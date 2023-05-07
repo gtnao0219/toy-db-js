@@ -174,8 +174,6 @@ export function evaluate(
       return evaluateLiteralExpression(expression, tuple, schema);
     case "path":
       return evaluatePathExpression(expression, tuple, schema);
-    default:
-      throw new Error("Not implemented");
   }
 }
 function evaluateBinaryOperationExpression(
@@ -247,6 +245,145 @@ function evaluatePathExpression(
 ): Value {
   return tuple.values[expression.columnIndex];
 }
+export function evaluateJoin(
+  expression: ExpressionPlanNode,
+  leftTuple: Tuple,
+  leftSchema: Schema,
+  rightTuple: Tuple,
+  rightSchema: Schema
+): Value {
+  switch (expression.type) {
+    case "binary_operation":
+      return evaluateJoinBinaryOperationExpression(
+        expression,
+        leftTuple,
+        leftSchema,
+        rightTuple,
+        rightSchema
+      );
+    case "unary_operation":
+      return evaluateJoinUnaryOperationExpression(
+        expression,
+        leftTuple,
+        leftSchema,
+        rightTuple,
+        rightSchema
+      );
+    case "literal":
+      return evaluateJoinLiteralExpression(
+        expression,
+        leftTuple,
+        leftSchema,
+        rightTuple,
+        rightSchema
+      );
+    case "path":
+      return evaluateJoinPathExpression(
+        expression,
+        leftTuple,
+        leftSchema,
+        rightTuple,
+        rightSchema
+      );
+  }
+}
+function evaluateJoinBinaryOperationExpression(
+  expression: BinaryOperationExpressionPlanNode,
+  leftTuple: Tuple,
+  leftSchema: Schema,
+  rightTuple: Tuple,
+  rightSchema: Schema
+): Value {
+  const left = evaluateJoin(
+    expression.left,
+    leftTuple,
+    leftSchema,
+    rightTuple,
+    rightSchema
+  );
+  const right = evaluateJoin(
+    expression.right,
+    leftTuple,
+    leftSchema,
+    rightTuple,
+    rightSchema
+  );
+  switch (expression.operator) {
+    case "+":
+      return left.add(right);
+    case "-":
+      return left.subtract(right);
+    case "*":
+      return left.multiply(right);
+    case "=":
+      return left.equal(right);
+    case "<>":
+      return left.notEqual(right);
+    case "<":
+      return left.lessThan(right);
+    case ">":
+      return left.greaterThan(right);
+    case "<=":
+      return left.lessThanEqual(right);
+    case ">=":
+      return left.greaterThanEqual(right);
+    case "AND":
+      return left.and(right);
+    case "OR":
+      return left.or(right);
+  }
+}
+function evaluateJoinUnaryOperationExpression(
+  expression: UnaryOperationExpressionPlanNode,
+  leftTuple: Tuple,
+  leftSchema: Schema,
+  rightTuple: Tuple,
+  rightSchema: Schema
+): Value {
+  const operand = evaluateJoin(
+    expression.operand,
+    leftTuple,
+    leftSchema,
+    rightTuple,
+    rightSchema
+  );
+  switch (expression.operator) {
+    case "NOT":
+      return operand.not();
+  }
+}
+function evaluateJoinLiteralExpression(
+  expression: LiteralExpressionPlanNode,
+  leftTuple: Tuple,
+  leftSchema: Schema,
+  rightTuple: Tuple,
+  rightSchema: Schema
+): Value {
+  if (typeof expression.value === "boolean") {
+    return new BooleanValue(expression.value);
+  }
+  if (typeof expression.value === "number") {
+    return new IntegerValue(expression.value);
+  }
+  if (typeof expression.value === "string") {
+    return new VarcharValue(expression.value);
+  }
+  if (expression.value === null) {
+    throw new Error("Not implemented");
+  }
+  throw new Error("Not implemented");
+}
+function evaluateJoinPathExpression(
+  expression: PathExpressionPlanNode,
+  leftTuple: Tuple,
+  leftSchema: Schema,
+  rightTuple: Tuple,
+  rightSchema: Schema
+): Value {
+  return expression.tupleIndex === 0
+    ? leftTuple.values[expression.columnIndex]
+    : rightTuple.values[expression.columnIndex];
+}
 
 export function inferType(expression: ExpressionPlanNode): Type {
   switch (expression.type) {
@@ -301,5 +438,5 @@ function inferLiteralType(expression: LiteralExpressionPlanNode): Type {
     // TODO:
     return Type.BOOLEAN;
   }
-  throw new Error("Not implemented");
+  throw new Error("Not implemented4");
 }

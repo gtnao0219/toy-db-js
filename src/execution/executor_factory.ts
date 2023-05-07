@@ -3,6 +3,7 @@ import { Executor } from "./executor/executor";
 import { FilterExecutor } from "./executor/filter_executor";
 import { InsertExecutor } from "./executor/insert_executor";
 import { LimitExecutor } from "./executor/limit_executor";
+import { NestedLoopJoinExecutor } from "./executor/nested_loop_join_executor";
 import { ProjectionExecutor } from "./executor/projection_executor";
 import { SeqScanExecutor } from "./executor/seq_scan_executor";
 import { SortExecutor } from "./executor/sort_executor";
@@ -31,6 +32,13 @@ export function createExecutor(
       );
     case "seq_scan":
       return new SeqScanExecutor(executorContext, plan);
+    case "nested_loop_join":
+      return new NestedLoopJoinExecutor(
+        executorContext,
+        plan,
+        createExecutor(executorContext, plan.left),
+        createExecutor(executorContext, plan.right)
+      );
     case "project":
       return new ProjectionExecutor(
         executorContext,

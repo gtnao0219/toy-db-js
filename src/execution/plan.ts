@@ -1,9 +1,10 @@
 import { Schema } from "../catalog/schema";
-import { Direction } from "../parser/ast";
+import { Direction, JoinType } from "../parser/ast";
 import { ExpressionPlanNode, PathExpressionPlanNode } from "./expression_plan";
 
 export type PlanNode =
   | SeqScanPlanNode
+  | NestedLoopJoinPlanNode
   | FilterPlanNode
   | ProjectPlanNode
   | SortPlanNode
@@ -14,6 +15,14 @@ export type PlanNode =
 export type SeqScanPlanNode = {
   type: "seq_scan";
   tableOid: number;
+  outputSchema: Schema;
+};
+export type NestedLoopJoinPlanNode = {
+  type: "nested_loop_join";
+  joinType: JoinType;
+  condition: ExpressionPlanNode;
+  left: PlanNode;
+  right: PlanNode;
   outputSchema: Schema;
 };
 export type FilterPlanNode = {

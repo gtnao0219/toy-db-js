@@ -7,6 +7,7 @@ export enum ExecutorType {
   INSERT,
   DELETE,
   UPDATE,
+  NESTED_LOOP_JOIN,
   SEQ_SCAN,
   PROJECTION,
   FILTER,

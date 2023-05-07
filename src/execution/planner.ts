@@ -145,7 +145,23 @@ function planTableReference(tableReference: BoundTableReference): PlanNode {
         ),
       };
     case "join_table_reference":
-      throw new Error("Not implemented");
+      const left = planTableReference(tableReference.left);
+      const right = planTableReference(tableReference.right);
+      const [_, condition] = planExpression(tableReference.condition, [
+        left,
+        right,
+      ]);
+      return {
+        type: "nested_loop_join",
+        joinType: tableReference.joinType,
+        condition,
+        left,
+        right,
+        outputSchema: new Schema([
+          ...left.outputSchema.columns,
+          ...right.outputSchema.columns,
+        ]),
+      };
     case "subquery_table_reference":
       return planSelectStatement(tableReference.query);
   }
