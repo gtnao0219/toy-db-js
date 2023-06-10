@@ -30,6 +30,8 @@ export type SelectStatementAST = {
   // TODO: optional
   tableReference: TableReferenceAST;
   condition?: ExpressionAST;
+  groupBy?: PathExpressionAST[];
+  having?: ExpressionAST;
   orderBy?: OrderByAST;
   limit?: LimitAST;
 };
@@ -103,6 +105,7 @@ export type RollbackStatementAST = {
 export type ExpressionAST =
   | BinaryOperationExpressionAST
   | UnaryOperationExpressionAST
+  | FunctionCallExpressionAST
   | LiteralExpressionAST
   | PathExpressionAST;
 export type BinaryOperator =
@@ -128,6 +131,11 @@ export type UnaryOperationExpressionAST = {
   type: "unary_operation";
   operator: UnaryOperator;
   operand: ExpressionAST;
+};
+export type FunctionCallExpressionAST = {
+  type: "function_call";
+  functionName: string;
+  args: ExpressionAST[];
 };
 export type PathExpressionAST = {
   type: "path";

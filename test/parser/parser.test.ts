@@ -470,5 +470,20 @@ describe("Parser", () => {
         },
       });
     });
+    it("should parse a function call", () => {
+      const sql = "SELECT MAX(t1.foo) FROM t1";
+      const parser = new Parser(sql);
+      const ast = parser.parse() as SelectStatementAST;
+      expect(ast.selectElements[0].expression).toEqual({
+        type: "function_call",
+        functionName: "MAX",
+        args: [
+          {
+            type: "path",
+            path: ["t1", "foo"],
+          },
+        ],
+      });
+    });
   });
 });

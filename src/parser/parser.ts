@@ -11,6 +11,7 @@ import {
   JoinType,
   LimitAST,
   OrderByAST,
+  PathExpressionAST,
   RollbackStatementAST,
   SelectElementAST,
   SelectStatementAST,
@@ -115,6 +116,8 @@ export class Parser {
     this.consumeKeywordOrError("FROM");
     const tableReference = this.tableReference();
     const condition = this.where();
+    const groupBy = this.groupBy();
+    const having = this.having();
     const orderBy = this.orderBy();
     const limit = this.limit();
     return {
@@ -123,6 +126,8 @@ export class Parser {
       selectElements,
       tableReference,
       ...(condition != null ? { condition } : {}),
+      ...(groupBy != null ? { groupBy } : {}),
+      ...(having != null ? { having } : {}),
       ...(orderBy != null ? { orderBy } : {}),
       ...(limit != null ? { limit } : {}),
     };
@@ -202,6 +207,32 @@ export class Parser {
   }
   private where(): ExpressionAST | null {
     if (this.consumeKeyword("WHERE")) {
+      return this.expression();
+    }
+    return null;
+  }
+  private groupBy(): PathExpressionAST[] | null {
+    if (this.consumeKeyword("GROUP")) {
+      this.consumeKeywordOrError("BY");
+      const expressions: PathExpressionAST[] = [];
+      const expression = this.expression();
+      if (expression.type !== "path") {
+        throw new Error("Expected path expression");
+      }
+      expressions.push(expression);
+      while (this.consume("comma")) {
+        const expression = this.expression();
+        if (expression.type !== "path") {
+          throw new Error("Expected path expression");
+        }
+        expressions.push(expression);
+      }
+      return expressions;
+    }
+    return null;
+  }
+  private having(): ExpressionAST | null {
+    if (this.consumeKeyword("HAVING")) {
       return this.expression();
     }
     return null;
@@ -364,9 +395,9 @@ export class Parser {
     return this.comparison();
   }
   private comparison(): ExpressionAST {
-    const left = this.arithmetic();
+    const left = this.functionCall();
     if (this.consume("less_than")) {
-      const right = this.arithmetic();
+      const right = this.functionCall();
       return {
         type: "binary_operation",
         operator: "<",
@@ -375,7 +406,7 @@ export class Parser {
       };
     }
     if (this.consume("greater_than")) {
-      const right = this.arithmetic();
+      const right = this.functionCall();
       return {
         type: "binary_operation",
         operator: ">",
@@ -384,7 +415,7 @@ export class Parser {
       };
     }
     if (this.consume("less_than_equal")) {
-      const right = this.arithmetic();
+      const right = this.functionCall();
       return {
         type: "binary_operation",
         operator: "<=",
@@ -393,7 +424,7 @@ export class Parser {
       };
     }
     if (this.consume("greater_than_equal")) {
-      const right = this.arithmetic();
+      const right = this.functionCall();
       return {
         type: "binary_operation",
         operator: ">=",
@@ -402,7 +433,7 @@ export class Parser {
       };
     }
     if (this.consume("equal")) {
-      const right = this.arithmetic();
+      const right = this.functionCall();
       return {
         type: "binary_operation",
         operator: "=",
@@ -411,7 +442,7 @@ export class Parser {
       };
     }
     if (this.consume("not_equal")) {
-      const right = this.arithmetic();
+      const right = this.functionCall();
       return {
         type: "binary_operation",
         operator: "<>",
@@ -420,6 +451,27 @@ export class Parser {
       };
     }
     return left;
+  }
+  private functionCall(): ExpressionAST {
+    if (this.match("identifier") && this.matchLookahead(1, "left_paren")) {
+      const functionName = this.consumeIdentifierOrError();
+      this.consumeOrError("left_paren");
+      const args = [];
+      while (!this.match("right_paren")) {
+        args.push(this.expression());
+        if (!this.consume("comma")) {
+          break;
+        }
+      }
+      this.consumeOrError("right_paren");
+
+      return {
+        type: "function_call",
+        functionName,
+        args,
+      };
+    }
+    return this.arithmetic();
   }
   private arithmetic(): ExpressionAST {
     let left = this.term();
@@ -480,6 +532,12 @@ export class Parser {
   // utils
   private match(tokenType: string): boolean {
     return this.tokens[this.position].type === tokenType;
+  }
+  private matchLookahead(offset: number, tokenType: string): boolean {
+    if (this.position + offset >= this.tokens.length) {
+      return false;
+    }
+    return this.tokens[this.position + offset].type === tokenType;
   }
   private matchKeyword(keyword: string): boolean {
     const current = this.tokens[this.position];

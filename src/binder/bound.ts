@@ -30,6 +30,8 @@ export type BoundSelectStatement = {
   selectElements: BoundSelectElement[];
   tableReference: BoundTableReference;
   condition?: BoundExpression;
+  groupBy?: BoundPathExpression[];
+  having?: BoundExpression;
   orderBy?: BoundOrderBy;
   limit?: BoundLimit;
 };
@@ -97,6 +99,7 @@ export type BoundSubqueryTableReference = {
 export type BoundExpression =
   | BoundBinaryOperationExpression
   | BoundUnaryOperationExpression
+  | BoundFunctionCallExpression
   | BoundLiteralExpression
   | BoundPathExpression;
 export type BoundBinaryOperationExpression = {
@@ -109,6 +112,11 @@ export type BoundUnaryOperationExpression = {
   type: "unary_operation";
   operator: UnaryOperator;
   operand: BoundExpression;
+};
+export type BoundFunctionCallExpression = {
+  type: "function_call";
+  functionName: string;
+  args: BoundExpression[];
 };
 export type BoundPathExpression = {
   type: "path";

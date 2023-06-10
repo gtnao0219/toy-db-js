@@ -1,6 +1,7 @@
 import {
   BoundBinaryOperationExpression,
   BoundExpression,
+  BoundFunctionCallExpression,
   BoundLiteralExpression,
   BoundPathExpression,
   BoundUnaryOperationExpression,
@@ -19,6 +20,7 @@ import { PlanNode } from "./plan";
 export type ExpressionPlanNode =
   | BinaryOperationExpressionPlanNode
   | UnaryOperationExpressionPlanNode
+  | FunctionCallExpressionPlanNode
   | LiteralExpressionPlanNode
   | PathExpressionPlanNode;
 export type BinaryOperationExpressionPlanNode = {
@@ -31,6 +33,11 @@ export type UnaryOperationExpressionPlanNode = {
   type: "unary_operation";
   operator: UnaryOperator;
   operand: ExpressionPlanNode;
+};
+export type FunctionCallExpressionPlanNode = {
+  type: "function_call";
+  functionName: string;
+  args: ExpressionPlanNode[];
 };
 export type LiteralExpressionPlanNode = {
   type: "literal";
@@ -54,6 +61,8 @@ export function planExpression(
       return planBinaryOperationExpression(expression, children);
     case "unary_operation":
       return planUnaryOperationExpression(expression, children);
+    case "function_call":
+      return planFunctionCallExpression(expression, children);
     case "literal":
       return planLiteralExpression(expression, children);
     case "path":
@@ -88,6 +97,20 @@ export function planUnaryOperationExpression(
       type: "unary_operation",
       operator: expression.operator,
       operand,
+    },
+  ];
+}
+export function planFunctionCallExpression(
+  expression: BoundFunctionCallExpression,
+  children: PlanNode[]
+): [string, FunctionCallExpressionPlanNode] {
+  const args = expression.args.map((arg) => planExpression(arg, children)[1]);
+  return [
+    UNNAMED,
+    {
+      type: "function_call",
+      functionName: expression.functionName,
+      args,
     },
   ];
 }
@@ -170,6 +193,8 @@ export function evaluate(
       return evaluateBinaryOperationExpression(expression, tuple, schema);
     case "unary_operation":
       return evaluateUnaryOperationExpression(expression, tuple, schema);
+    case "function_call":
+      return evaluateFunctionCallExpression(expression, tuple, schema);
     case "literal":
       return evaluateLiteralExpression(expression, tuple, schema);
     case "path":
@@ -219,6 +244,13 @@ function evaluateUnaryOperationExpression(
       return operand.not();
   }
 }
+function evaluateFunctionCallExpression(
+  expression: FunctionCallExpressionPlanNode,
+  tuple: Tuple,
+  schema: Schema
+): Value {
+  throw new Error("Not implemented");
+}
 function evaluateLiteralExpression(
   expression: LiteralExpressionPlanNode,
   tuple: Tuple,
@@ -263,6 +295,14 @@ export function evaluateJoin(
       );
     case "unary_operation":
       return evaluateJoinUnaryOperationExpression(
+        expression,
+        leftTuple,
+        leftSchema,
+        rightTuple,
+        rightSchema
+      );
+    case "function_call":
+      return evaluateJoinFunctionCallExpression(
         expression,
         leftTuple,
         leftSchema,
@@ -352,6 +392,15 @@ function evaluateJoinUnaryOperationExpression(
       return operand.not();
   }
 }
+function evaluateJoinFunctionCallExpression(
+  expression: FunctionCallExpressionPlanNode,
+  leftTuple: Tuple,
+  leftSchema: Schema,
+  rightTuple: Tuple,
+  rightSchema: Schema
+): Value {
+  throw new Error("Not implemented");
+}
 function evaluateJoinLiteralExpression(
   expression: LiteralExpressionPlanNode,
   leftTuple: Tuple,
@@ -384,13 +433,14 @@ function evaluateJoinPathExpression(
     ? leftTuple.values[expression.columnIndex]
     : rightTuple.values[expression.columnIndex];
 }
-
 export function inferType(expression: ExpressionPlanNode): Type {
   switch (expression.type) {
     case "binary_operation":
       return inferBinaryOperationType(expression);
     case "unary_operation":
       return inferUnaryOperationType(expression);
+    case "function_call":
+      return Type.INTEGER;
     case "literal":
       return inferLiteralType(expression);
     case "path":

@@ -7,6 +7,7 @@ import {
   DeleteStatementAST,
   DropTableStatementAST,
   ExpressionAST,
+  FunctionCallExpressionAST,
   InsertStatementAST,
   LiteralExpressionAST,
   PathExpressionAST,
@@ -35,6 +36,7 @@ import {
   BoundSubqueryTableReference,
   BoundDropTableStatement,
   BoundSelectElement,
+  BoundFunctionCallExpression,
 } from "./bound";
 
 export class Binder {
@@ -246,6 +248,9 @@ export class Binder {
       case "unary_operation": {
         return this.bindUnaryOperationExpression(ast);
       }
+      case "function_call": {
+        return this.bindFunctionCallExpression(ast);
+      }
       case "literal": {
         return this.bindLiteralExpression(ast);
       }
@@ -271,6 +276,15 @@ export class Binder {
       type: "unary_operation",
       operator: ast.operator,
       operand: this.bindExpression(ast.operand),
+    };
+  }
+  bindFunctionCallExpression(
+    ast: FunctionCallExpressionAST
+  ): BoundFunctionCallExpression {
+    return {
+      type: "function_call",
+      functionName: ast.functionName,
+      args: ast.args.map((arg) => this.bindExpression(arg)),
     };
   }
   bindLiteralExpression(ast: LiteralExpressionAST): BoundLiteralExpression {
