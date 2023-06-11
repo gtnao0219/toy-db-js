@@ -1,4 +1,3 @@
-import { Debuggable } from "../common/common";
 import { DiskManager } from "../storage/disk/disk_manager";
 import { Page, PageDeserializer, PageType } from "../storage/page/page";
 import { newEmptyPage } from "../storage/page/page_generator";
@@ -7,7 +6,15 @@ import { Replacer } from "./replacer";
 
 const POOL_SIZE = 32;
 
-export class BufferPoolManager implements Debuggable {
+export interface BufferPoolManager {
+  fetchPage(pageId: number, pageDeserializer: PageDeserializer): Promise<Page>;
+  unpinPage(pageId: number, isDirty: boolean): void;
+  newPage(pageType: PageType): Promise<Page>;
+  flushPage(pageId: number): Promise<void>;
+  flushAllPages(): Promise<void>;
+}
+
+export class BufferPoolManagerImpl implements BufferPoolManager {
   constructor(
     private _diskManager: DiskManager,
     private _replacer: Replacer = new LRUReplacer(),
@@ -79,14 +86,6 @@ export class BufferPoolManager implements Debuggable {
         await this._diskManager.writePage(page);
       }
     }
-  }
-  debug(): object {
-    return {
-      replacer: this._replacer.debug(),
-      pages: this._pages.map((page) => (page == null ? null : page.pageId)),
-      // pageTable: Array.from(this._pageTable.entries()),
-      // freeFrameIds: this._freeFrameIds,
-    };
   }
   private getPage(frameId: number): Page {
     const page = this._pages[frameId];

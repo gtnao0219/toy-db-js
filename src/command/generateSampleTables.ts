@@ -1,5 +1,5 @@
 import { Binder } from "../binder/binder";
-import { BufferPoolManager } from "../buffer/buffer_pool_manager";
+import { BufferPoolManagerImpl } from "../buffer/buffer_pool_manager";
 import { Catalog } from "../catalog/catalog";
 import { Column } from "../catalog/column";
 import { Schema } from "../catalog/schema";
@@ -10,16 +10,16 @@ import { ExecutorEngine } from "../execution/executor_engine";
 import { PlanNode } from "../execution/plan";
 import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
-import { DiskManager } from "../storage/disk/disk_manager";
+import { DiskManagerImpl } from "../storage/disk/disk_manager";
 import { Type } from "../type/type";
 
 (async () => {
-  const diskManager = new DiskManager();
+  const diskManager = new DiskManagerImpl();
   const mustInitialize = !diskManager.existsDataFile();
   if (mustInitialize) {
     await diskManager.createDataFile();
   }
-  const bufferPoolManager = new BufferPoolManager(diskManager);
+  const bufferPoolManager = new BufferPoolManagerImpl(diskManager);
   const lockManager = new LockManager();
   const transactionManager = new TransactionManager(lockManager);
   const catalog = new Catalog(bufferPoolManager);

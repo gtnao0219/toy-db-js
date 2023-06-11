@@ -3,7 +3,15 @@ import { PAGE_SIZE, Page, PageDeserializer } from "../page/page";
 
 const DEFAULT_DATA_FILE_NAME = "data";
 
-export class DiskManager {
+export interface DiskManager {
+  existsDataFile(): boolean;
+  createDataFile(): Promise<boolean>;
+  readPage(pageId: number, pageDeserializer: PageDeserializer): Promise<Page>;
+  writePage(page: Page): Promise<void>;
+  allocatePageId(): Promise<number>;
+}
+
+export class DiskManagerImpl implements DiskManager {
   constructor(private _data_file_name: string = DEFAULT_DATA_FILE_NAME) {}
   existsDataFile(): boolean {
     return existsSync(this._data_file_name);

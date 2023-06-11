@@ -1,27 +1,32 @@
 import { promises as fsp } from "fs";
-import { DiskManager } from "../../../src/storage/disk/disk_manager";
+import {
+  DiskManager,
+  DiskManagerImpl,
+} from "../../../src/storage/disk/disk_manager";
 import {
   PAGE_SIZE,
   Page,
   PageDeserializer,
 } from "../../../src/storage/page/page";
 
-describe("DiskManager", () => {
+describe("DiskManagerImpl", () => {
   describe("existsDataFile", () => {
     it("returns false if data file does not exist", () => {
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/does_not_exist"
       );
       expect(diskManager.existsDataFile()).toBe(false);
     });
     it("returns true if data file exists", () => {
-      const diskManager = new DiskManager("test/data/disk_manager/empty_data");
+      const diskManager = new DiskManagerImpl(
+        "test/data/disk_manager/empty_data"
+      );
       expect(diskManager.existsDataFile()).toBe(true);
     });
   });
   describe("createDataFile", () => {
     it("creates empty data file", async () => {
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/does_not_exist"
       );
       const created = await diskManager.createDataFile();
@@ -33,14 +38,16 @@ describe("DiskManager", () => {
       await fsp.unlink("test/data/disk_manager/does_not_exist");
     });
     it("does not create data file if it already exists", async () => {
-      const diskManager = new DiskManager("test/data/disk_manager/empty_data");
+      const diskManager = new DiskManagerImpl(
+        "test/data/disk_manager/empty_data"
+      );
       const created = await diskManager.createDataFile();
       expect(created).toBe(false);
     });
   });
   describe("readPage", () => {
     it("reads page from data file", async () => {
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_read_data"
       );
       const page = await diskManager.readPage(0, new TestPageDeserializer());
@@ -51,7 +58,7 @@ describe("DiskManager", () => {
       expect(page.randomNumbers).toEqual([2, 3, 5, 7, 11, 13, 17, 19]);
     });
     it("reads second page from data file", async () => {
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_read_data"
       );
       const page = await diskManager.readPage(1, new TestPageDeserializer());
@@ -69,7 +76,7 @@ describe("DiskManager", () => {
         "test/data/disk_manager/test_page_read_data",
         "test/data/disk_manager/test_page_write_data"
       );
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_write_data"
       );
       const thirdPage = new TestPage(2, [59, 61, 67, 71, 73, 79, 83, 89]);
@@ -103,7 +110,7 @@ describe("DiskManager", () => {
         "test/data/disk_manager/test_page_temp_data"
       );
 
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_temp_data"
       );
       const pageId = await diskManager.allocatePageId();
@@ -123,7 +130,7 @@ describe("DiskManager", () => {
         "test/data/disk_manager/test_page_temp_data"
       );
 
-      const diskManager = new DiskManager(
+      const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_temp_data"
       );
       const pageId = await diskManager.allocatePageId();
@@ -173,7 +180,7 @@ class TestPageDeserializer implements PageDeserializer {
 }
 
 async function prepareTestPageReadData() {
-  const diskManager = new DiskManager(
+  const diskManager = new DiskManagerImpl(
     "test/data/disk_manager/test_page_read_data"
   );
   diskManager.createDataFile();

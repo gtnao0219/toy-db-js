@@ -1,5 +1,8 @@
 import { Binder } from "../binder/binder";
-import { BufferPoolManager } from "../buffer/buffer_pool_manager";
+import {
+  BufferPoolManager,
+  BufferPoolManagerImpl,
+} from "../buffer/buffer_pool_manager";
 import { Catalog } from "../catalog/catalog";
 import { LockManager } from "../concurrency/lock_manager";
 import { Transaction } from "../concurrency/transaction";
@@ -8,7 +11,7 @@ import { ExecutorContext } from "../execution/executor_context";
 import { ExecutorEngine } from "../execution/executor_engine";
 import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
-import { DiskManager } from "../storage/disk/disk_manager";
+import { DiskManager, DiskManagerImpl } from "../storage/disk/disk_manager";
 import { Tuple } from "../storage/table/tuple";
 import { Debuggable } from "./common";
 
@@ -25,8 +28,8 @@ export class Instance implements Debuggable {
   private _catalog: Catalog;
   private _executorEngine: ExecutorEngine;
   constructor() {
-    this._diskManager = new DiskManager();
-    this._bufferPoolManager = new BufferPoolManager(this._diskManager);
+    this._diskManager = new DiskManagerImpl();
+    this._bufferPoolManager = new BufferPoolManagerImpl(this._diskManager);
     this._lockManager = new LockManager();
     this._transactionManager = new TransactionManager(this._lockManager);
     this._catalog = new Catalog(this._bufferPoolManager);
