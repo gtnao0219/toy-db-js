@@ -1,7 +1,6 @@
-import { Debuggable } from "../common/common";
 import { Replacer } from "./replacer";
 
-export class LRUReplacer implements Replacer, Debuggable {
+export class LRUReplacer implements Replacer {
   constructor(private _frameMap: Map<number, number> = new Map()) {}
   victim(): number {
     if (this._frameMap.size === 0) {
@@ -26,10 +25,5 @@ export class LRUReplacer implements Replacer, Debuggable {
   }
   size(): number {
     return this._frameMap.size;
-  }
-  debug(): object {
-    return {
-      frameMap: Array.from(this._frameMap.entries()),
-    };
   }
 }
