@@ -38,7 +38,8 @@ export class BufferPoolManagerImpl implements BufferPoolManager {
       return page;
     }
     const availableFrameId = await this.getAvailableFrameId();
-    const page = await this._diskManager.readPage(pageId, pageDeserializer);
+    const buffer = await this._diskManager.readPage(pageId);
+    const page = pageDeserializer.deserialize(buffer);
     this._pages[availableFrameId] = page;
     this._pageTable.set(pageId, availableFrameId);
     page.addPinCount();
@@ -76,14 +77,14 @@ export class BufferPoolManagerImpl implements BufferPoolManager {
     }
     const page = this.getPage(frameId);
     if (page.isDirty) {
-      await this._diskManager.writePage(page);
+      await this._diskManager.writePage(page.pageId, page.serialize());
     }
     // TODO: should we delete the page from buffer pool?
   }
   async flushAllPages(): Promise<void> {
     for (const page of this._pages) {
       if (page != null) {
-        await this._diskManager.writePage(page);
+        await this._diskManager.writePage(page.pageId, page.serialize());
       }
     }
   }
@@ -108,7 +109,7 @@ export class BufferPoolManagerImpl implements BufferPoolManager {
     const frameId = this._replacer.victim();
     const page = this.getPage(frameId);
     if (page.isDirty) {
-      await this._diskManager.writePage(page);
+      await this._diskManager.writePage(page.pageId, page.serialize());
     }
     this._pageTable.delete(page.pageId);
     return frameId;

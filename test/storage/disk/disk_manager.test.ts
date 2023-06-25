@@ -1,8 +1,5 @@
 import { promises as fsp } from "fs";
-import {
-  DiskManager,
-  DiskManagerImpl,
-} from "../../../src/storage/disk/disk_manager";
+import { DiskManagerImpl } from "../../../src/storage/disk/disk_manager";
 import {
   PAGE_SIZE,
   Page,
@@ -33,16 +30,19 @@ describe("DiskManagerImpl", () => {
       expect(created).toBe(true);
       const stats = await fsp.stat("test/data/disk_manager/does_not_exist");
       expect(stats.size).toBe(0);
-
       // Cleanup
       await fsp.unlink("test/data/disk_manager/does_not_exist");
     });
     it("does not create data file if it already exists", async () => {
       const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/empty_data"
+        "test/data/disk_manager/test_page_read_data"
       );
       const created = await diskManager.createDataFile();
       expect(created).toBe(false);
+      const stats = await fsp.stat(
+        "test/data/disk_manager/test_page_read_data"
+      );
+      expect(stats.size).toBe(PAGE_SIZE * 2);
     });
   });
   describe("readPage", () => {
@@ -50,23 +50,21 @@ describe("DiskManagerImpl", () => {
       const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_read_data"
       );
-      const page = await diskManager.readPage(0, new TestPageDeserializer());
-      if (!(page instanceof TestPage)) {
-        throw new Error("page is not TestPage");
+      const buffer = await diskManager.readPage(0);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < view.length; i++) {
+        expect(view[i]).toBe(1);
       }
-      expect(page.pageId).toBe(0);
-      expect(page.randomNumbers).toEqual([2, 3, 5, 7, 11, 13, 17, 19]);
     });
     it("reads second page from data file", async () => {
       const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_read_data"
       );
-      const page = await diskManager.readPage(1, new TestPageDeserializer());
-      if (!(page instanceof TestPage)) {
-        throw new Error("page is not TestPage");
+      const buffer = await diskManager.readPage(1);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < view.length; i++) {
+        expect(view[i]).toBe(2);
       }
-      expect(page.pageId).toBe(1);
-      expect(page.randomNumbers).toEqual([23, 29, 31, 37, 41, 43, 47, 53]);
     });
   });
   describe("writePage", () => {
@@ -79,25 +77,22 @@ describe("DiskManagerImpl", () => {
       const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_write_data"
       );
-      const thirdPage = new TestPage(2, [59, 61, 67, 71, 73, 79, 83, 89]);
-      await diskManager.writePage(thirdPage);
-
-      const newPage = await diskManager.readPage(2, new TestPageDeserializer());
-      if (!(newPage instanceof TestPage)) {
-        throw new Error("page is not TestPage");
+      const buffer = new ArrayBuffer(PAGE_SIZE);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < view.length; i++) {
+        view[i] = 3;
       }
-      expect(newPage.pageId).toBe(2);
-      expect(newPage.randomNumbers).toEqual([59, 61, 67, 71, 73, 79, 83, 89]);
-      const firstPage = await diskManager.readPage(
-        0,
-        new TestPageDeserializer()
-      );
-      if (!(firstPage instanceof TestPage)) {
-        throw new Error("page is not TestPage");
+      await diskManager.writePage(2, buffer);
+      const newPageBuffer = await diskManager.readPage(2);
+      const newPageView = new Uint8Array(newPageBuffer);
+      for (let i = 0; i < newPageView.length; i++) {
+        expect(newPageView[i]).toBe(3);
       }
-      expect(firstPage.pageId).toBe(0);
-      expect(firstPage.randomNumbers).toEqual([2, 3, 5, 7, 11, 13, 17, 19]);
-
+      const firstPageBuffer = await diskManager.readPage(0);
+      const firstPageView = new Uint8Array(firstPageBuffer);
+      for (let i = 0; i < firstPageView.length; i++) {
+        expect(firstPageView[i]).toBe(1);
+      }
       // Cleanup
       await fsp.unlink("test/data/disk_manager/test_page_write_data");
     });
@@ -109,7 +104,6 @@ describe("DiskManagerImpl", () => {
         "test/data/disk_manager/empty_data",
         "test/data/disk_manager/test_page_temp_data"
       );
-
       const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_temp_data"
       );
@@ -119,7 +113,6 @@ describe("DiskManagerImpl", () => {
         "test/data/disk_manager/test_page_temp_data"
       );
       expect(stats.size).toBe(PAGE_SIZE);
-
       // Cleanup
       await fsp.unlink("test/data/disk_manager/test_page_temp_data");
     });
@@ -129,7 +122,6 @@ describe("DiskManagerImpl", () => {
         "test/data/disk_manager/test_page_read_data",
         "test/data/disk_manager/test_page_temp_data"
       );
-
       const diskManager = new DiskManagerImpl(
         "test/data/disk_manager/test_page_temp_data"
       );
@@ -139,53 +131,57 @@ describe("DiskManagerImpl", () => {
         "test/data/disk_manager/test_page_temp_data"
       );
       expect(stats.size).toBe(PAGE_SIZE * 3);
-
+      // Cleanup
+      await fsp.unlink("test/data/disk_manager/test_page_temp_data");
+    });
+    it("should allocate unique PageIds even when called concurrently", async () => {
+      // copy test data file
+      await fsp.copyFile(
+        "test/data/disk_manager/test_page_read_data",
+        "test/data/disk_manager/test_page_temp_data"
+      );
+      const diskManager = new DiskManagerImpl(
+        "test/data/disk_manager/test_page_temp_data"
+      );
+      const pageIds = await Promise.all([
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+        diskManager.allocatePageId(),
+      ]);
+      pageIds.sort((a, b) => a - b);
+      expect(pageIds).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+      const stats = await fsp.stat(
+        "test/data/disk_manager/test_page_temp_data"
+      );
+      expect(stats.size).toBe(PAGE_SIZE * 12);
       // Cleanup
       await fsp.unlink("test/data/disk_manager/test_page_temp_data");
     });
   });
 });
 
-class TestPage extends Page {
-  constructor(protected _pageId: number, public randomNumbers: number[]) {
-    super(_pageId);
-  }
-  serialize(): ArrayBuffer {
-    const size = 8 + this.randomNumbers.length * 4;
-    if (size > PAGE_SIZE) {
-      throw new Error("Page size exceeded");
-    }
-    const buffer = new ArrayBuffer(PAGE_SIZE);
-    const view = new DataView(buffer);
-    view.setInt32(0, this.pageId);
-    view.setInt32(4, this.randomNumbers.length);
-    for (let i = 0; i < this.randomNumbers.length; i++) {
-      view.setInt32(8 + i * 4, this.randomNumbers[i]);
-    }
-    return buffer;
-  }
-}
-class TestPageDeserializer implements PageDeserializer {
-  deserialize(buffer: ArrayBuffer): Page {
-    const view = new DataView(buffer);
-    const pageId = view.getInt32(0);
-    const size = view.getInt32(4);
-    const randomNumbers = [];
-    for (let i = 0; i < size; i++) {
-      const value = view.getInt32(8 + i * 4);
-      randomNumbers.push(value);
-    }
-    return new TestPage(pageId, randomNumbers);
-  }
-}
-
 async function prepareTestPageReadData() {
   const diskManager = new DiskManagerImpl(
     "test/data/disk_manager/test_page_read_data"
   );
   diskManager.createDataFile();
-  const firstPage = new TestPage(0, [2, 3, 5, 7, 11, 13, 17, 19]);
-  const secondPage = new TestPage(1, [23, 29, 31, 37, 41, 43, 47, 53]);
-  await diskManager.writePage(firstPage);
-  await diskManager.writePage(secondPage);
+  const firstPageBuffer = new ArrayBuffer(PAGE_SIZE);
+  const firstPageView = new Uint8Array(firstPageBuffer);
+  for (let i = 0; i < firstPageView.length; i++) {
+    firstPageView[i] = 1;
+  }
+  const secondPageBuffer = new ArrayBuffer(PAGE_SIZE);
+  const secondPageView = new Uint8Array(secondPageBuffer);
+  for (let i = 0; i < secondPageView.length; i++) {
+    secondPageView[i] = 2;
+  }
+  await diskManager.writePage(0, firstPageBuffer);
+  await diskManager.writePage(1, secondPageBuffer);
 }
