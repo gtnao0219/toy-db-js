@@ -4,6 +4,7 @@ import {
   HeaderPage,
   HeaderPageDeserializer,
   HeaderPageEntry,
+  HeaderPageGenerator,
 } from "../storage/page/header_page";
 import { INVALID_PAGE_ID, PageType } from "../storage/page/page";
 import { TableHeap } from "../storage/table/table_heap";
@@ -50,7 +51,7 @@ export class Catalog implements ICatalog {
   }
   async initialize(transaction: Transaction): Promise<void> {
     const headerPage = await this._bufferPoolManager.newPage(
-      PageType.HEADER_PAGE
+      new HeaderPageGenerator()
     );
     this._bufferPoolManager.unpinPage(headerPage.pageId, true);
     const tableInformationSchemaTableHeap = await TableHeap.create(
@@ -200,7 +201,7 @@ export class Catalog implements ICatalog {
     while (true) {
       if (pageId === INVALID_PAGE_ID) {
         const newPage = await this._bufferPoolManager.newPage(
-          PageType.HEADER_PAGE
+          new HeaderPageGenerator()
         );
         if (!(newPage instanceof HeaderPage)) {
           throw new Error("invalid page type");

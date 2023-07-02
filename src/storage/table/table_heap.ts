@@ -3,7 +3,11 @@ import { Schema } from "../../catalog/schema";
 import { RID } from "../../common/RID";
 import { Transaction, WriteType } from "../../concurrency/transaction";
 import { INVALID_PAGE_ID, PageType } from "../page/page";
-import { TablePage, TablePageDeserializer } from "../page/table_page";
+import {
+  TablePage,
+  TablePageDeserializer,
+  TablePageGenerator,
+} from "../page/table_page";
 import { Tuple } from "./tuple";
 
 // TODO: temp
@@ -32,7 +36,7 @@ export class TableHeap {
     _oid: number,
     _schema: Schema
   ): Promise<TableHeap> {
-    const page = await _bufferPoolManager.newPage(PageType.TABLE_PAGE);
+    const page = await _bufferPoolManager.newPage(new TablePageGenerator());
     _bufferPoolManager.unpinPage(page.pageId, true);
     return new TableHeap(_bufferPoolManager, _oid, page.pageId, _schema);
   }
@@ -84,7 +88,7 @@ export class TableHeap {
     while (true) {
       if (pageId === INVALID_PAGE_ID) {
         const newPage = await this._bufferPoolManager.newPage(
-          PageType.TABLE_PAGE
+          new TablePageGenerator()
         );
         if (!(newPage instanceof TablePage)) {
           throw new Error("invalid page type");

@@ -2,7 +2,13 @@ import { Schema } from "../../catalog/schema";
 import { RID } from "../../common/RID";
 import { Transaction } from "../../concurrency/transaction";
 import { Tuple, deserializeTuple } from "../table/tuple";
-import { INVALID_PAGE_ID, PAGE_SIZE, Page, PageDeserializer } from "./page";
+import {
+  INVALID_PAGE_ID,
+  PAGE_SIZE,
+  Page,
+  PageDeserializer,
+  PageGenerator,
+} from "./page";
 
 export const TABLE_PAGE_HEADER_PAGE_ID_SIZE = 4;
 export const TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE = 4;
@@ -21,8 +27,6 @@ export const TABLE_PAGE_LINE_POINTERS_SIZE =
 export class TablePage extends Page {
   constructor(
     protected _pageId: number = INVALID_PAGE_ID,
-    protected _isDirty: boolean = false,
-    protected _pinCount: number = 0,
     private _nextPageId: number = INVALID_PAGE_ID,
     private _tuples: Array<Tuple | null> = [],
     private _lowerOffset: number = TABLE_PAGE_HEADER_SIZE,
@@ -30,7 +34,7 @@ export class TablePage extends Page {
 
     private _deleteMarkedSet: Set<RID> = new Set()
   ) {
-    super(_pageId, _isDirty, _pinCount);
+    super(_pageId);
   }
   get nextPageId(): number {
     return this._nextPageId;
@@ -171,14 +175,12 @@ export class TablePageDeserializer implements PageDeserializer {
       const tupleBuffer = buffer.slice(offset, offset + size);
       tuples.push(deserializeTuple(tupleBuffer, this._schema));
     }
-    return new TablePage(
-      pageId,
-      false,
-      0,
-      nextPageId,
-      tuples,
-      lowerOffset,
-      upperOffset
-    );
+    return new TablePage(pageId, nextPageId, tuples, lowerOffset, upperOffset);
+  }
+}
+
+export class TablePageGenerator implements PageGenerator {
+  generate(pageId: number): TablePage {
+    return new TablePage(pageId);
   }
 }

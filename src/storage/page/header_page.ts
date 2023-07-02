@@ -1,4 +1,4 @@
-import { INVALID_PAGE_ID, PAGE_SIZE, Page } from "./page";
+import { INVALID_PAGE_ID, PAGE_SIZE, Page, PageGenerator } from "./page";
 
 export const HEADER_PAGE_HEADER_PAGE_ID_SIZE = 4;
 export const HEADER_PAGE_HEADER_NEXT_PAGE_ID_SIZE = 4;
@@ -20,12 +20,10 @@ export type HeaderPageEntry = {
 export class HeaderPage extends Page {
   constructor(
     protected _pageId: number = INVALID_PAGE_ID,
-    protected _isDirty: boolean = false,
-    protected _pinCount: number = 0,
     private _nextPageId: number = INVALID_PAGE_ID,
     private _entries: HeaderPageEntry[] = []
   ) {
-    super(_pageId, _isDirty, _pinCount);
+    super(_pageId);
   }
   get nextPageId(): number {
     return this._nextPageId;
@@ -107,6 +105,11 @@ export class HeaderPageDeserializer {
         firstPageId,
       });
     }
-    return new HeaderPage(pageId, false, 0, nextPageId, entries);
+    return new HeaderPage(pageId, nextPageId, entries);
+  }
+}
+export class HeaderPageGenerator implements PageGenerator {
+  generate(pageId: number): HeaderPage {
+    return new HeaderPage(pageId);
   }
 }
