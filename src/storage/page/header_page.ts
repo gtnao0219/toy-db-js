@@ -1,16 +1,13 @@
 import { INVALID_PAGE_ID, PAGE_SIZE, Page, PageGenerator } from "./page";
 
-export const HEADER_PAGE_HEADER_PAGE_ID_SIZE = 4;
-export const HEADER_PAGE_HEADER_NEXT_PAGE_ID_SIZE = 4;
-export const HEADER_PAGE_HEADER_ENTRY_COUNT_SIZE = 4;
-export const HEADER_PAGE_HEADER_SIZE =
-  HEADER_PAGE_HEADER_PAGE_ID_SIZE +
-  HEADER_PAGE_HEADER_NEXT_PAGE_ID_SIZE +
-  HEADER_PAGE_HEADER_ENTRY_COUNT_SIZE;
-export const HEADER_PAGE_ENTRY_OID_SIZE = 4;
-export const HEADER_PAGE_ENTRY_FIRST_PAGE_ID_SIZE = 4;
-export const HEADER_PAGE_ENTRY_SIZE =
-  HEADER_PAGE_ENTRY_OID_SIZE + HEADER_PAGE_ENTRY_FIRST_PAGE_ID_SIZE;
+const HEADER_PAGE_ID_SIZE = 4;
+const HEADER_NEXT_PAGE_ID_SIZE = 4;
+const HEADER_ENTRY_COUNT_SIZE = 4;
+const HEADER_SIZE =
+  HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE + HEADER_ENTRY_COUNT_SIZE;
+const ENTRY_OID_SIZE = 4;
+const ENTRY_FIRST_PAGE_ID_SIZE = 4;
+const ENTRY_SIZE = ENTRY_OID_SIZE + ENTRY_FIRST_PAGE_ID_SIZE;
 
 export type HeaderPageEntry = {
   oid: number;
@@ -38,21 +35,16 @@ export class HeaderPage extends Page {
     const buffer = new ArrayBuffer(PAGE_SIZE);
     const dataView = new DataView(buffer);
     dataView.setInt32(0, this.pageId);
-    dataView.setInt32(HEADER_PAGE_HEADER_PAGE_ID_SIZE, this._nextPageId);
+    dataView.setInt32(HEADER_PAGE_ID_SIZE, this._nextPageId);
     dataView.setInt32(
-      HEADER_PAGE_HEADER_PAGE_ID_SIZE + HEADER_PAGE_HEADER_NEXT_PAGE_ID_SIZE,
+      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE,
       this._entries.length
     );
     for (let i = 0; i < this._entries.length; ++i) {
       const entry = this._entries[i];
+      dataView.setInt32(HEADER_SIZE + i * ENTRY_SIZE, entry.oid);
       dataView.setInt32(
-        HEADER_PAGE_HEADER_SIZE + i * HEADER_PAGE_ENTRY_SIZE,
-        entry.oid
-      );
-      dataView.setInt32(
-        HEADER_PAGE_HEADER_SIZE +
-          i * HEADER_PAGE_ENTRY_SIZE +
-          HEADER_PAGE_ENTRY_OID_SIZE,
+        HEADER_SIZE + i * ENTRY_SIZE + ENTRY_OID_SIZE,
         entry.firstPageId
       );
     }
@@ -67,11 +59,7 @@ export class HeaderPage extends Page {
     return null;
   }
   insert(oid: number, firstPageId: number): boolean {
-    if (
-      PAGE_SIZE <
-      HEADER_PAGE_HEADER_SIZE +
-        (this._entries.length + 1) * HEADER_PAGE_ENTRY_SIZE
-    ) {
+    if (PAGE_SIZE < HEADER_SIZE + (this._entries.length + 1) * ENTRY_SIZE) {
       return false;
     }
     this._entries.push({
@@ -86,19 +74,15 @@ export class HeaderPageDeserializer {
   deserialize(buffer: ArrayBuffer): HeaderPage {
     const dataView = new DataView(buffer);
     const pageId = dataView.getInt32(0);
-    const nextPageId = dataView.getInt32(HEADER_PAGE_HEADER_PAGE_ID_SIZE);
+    const nextPageId = dataView.getInt32(HEADER_PAGE_ID_SIZE);
     const entryCount = dataView.getInt32(
-      HEADER_PAGE_HEADER_PAGE_ID_SIZE + HEADER_PAGE_HEADER_NEXT_PAGE_ID_SIZE
+      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE
     );
     const entries: HeaderPageEntry[] = [];
     for (let i = 0; i < entryCount; i++) {
-      const oid = dataView.getInt32(
-        HEADER_PAGE_HEADER_SIZE + i * HEADER_PAGE_ENTRY_SIZE
-      );
+      const oid = dataView.getInt32(HEADER_SIZE + i * ENTRY_SIZE);
       const firstPageId = dataView.getInt32(
-        HEADER_PAGE_HEADER_SIZE +
-          i * HEADER_PAGE_ENTRY_SIZE +
-          HEADER_PAGE_ENTRY_OID_SIZE
+        HEADER_SIZE + i * ENTRY_SIZE + ENTRY_OID_SIZE
       );
       entries.push({
         oid,
