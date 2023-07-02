@@ -10,26 +10,25 @@ import {
   PageGenerator,
 } from "./page";
 
-export const TABLE_PAGE_HEADER_PAGE_ID_SIZE = 4;
-export const TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE = 4;
-export const TABLE_PAGE_HEADER_LOWER_OFFSET_SIZE = 2;
-export const TABLE_PAGE_HEADER_UPPER_OFFSET_SIZE = 2;
-export const TABLE_PAGE_HEADER_SIZE =
-  TABLE_PAGE_HEADER_PAGE_ID_SIZE +
-  TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE +
-  TABLE_PAGE_HEADER_LOWER_OFFSET_SIZE +
-  TABLE_PAGE_HEADER_UPPER_OFFSET_SIZE;
-export const TABLE_PAGE_LINE_POINTER_OFFSET_SIZE = 2;
-export const TABLE_PAGE_LINE_POINTER_SIZE_SIZE = 2;
-export const TABLE_PAGE_LINE_POINTERS_SIZE =
-  TABLE_PAGE_LINE_POINTER_OFFSET_SIZE + TABLE_PAGE_LINE_POINTER_SIZE_SIZE;
+const HEADER_PAGE_ID_SIZE = 4;
+const HEADER_NEXT_PAGE_ID_SIZE = 4;
+const HEADER_LOWER_OFFSET_SIZE = 2;
+const HEADER_UPPER_OFFSET_SIZE = 2;
+const HEADER_SIZE =
+  HEADER_PAGE_ID_SIZE +
+  HEADER_NEXT_PAGE_ID_SIZE +
+  HEADER_LOWER_OFFSET_SIZE +
+  HEADER_UPPER_OFFSET_SIZE;
+const LINE_POINTER_OFFSET_SIZE = 2;
+const LINE_POINTER_SIZE_SIZE = 2;
+const LINE_POINTERS_SIZE = LINE_POINTER_OFFSET_SIZE + LINE_POINTER_SIZE_SIZE;
 
 export class TablePage extends Page {
   constructor(
     protected _pageId: number = INVALID_PAGE_ID,
     private _nextPageId: number = INVALID_PAGE_ID,
     private _tuples: Array<Tuple | null> = [],
-    private _lowerOffset: number = TABLE_PAGE_HEADER_SIZE,
+    private _lowerOffset: number = HEADER_SIZE,
     private _upperOffset: number = PAGE_SIZE,
 
     private _deleteMarkedSet: Set<RID> = new Set()
@@ -49,11 +48,10 @@ export class TablePage extends Page {
     const buffer = new ArrayBuffer(PAGE_SIZE);
     const dataView = new DataView(buffer);
     dataView.setInt32(0, this.pageId);
-    dataView.setInt32(TABLE_PAGE_HEADER_PAGE_ID_SIZE, this._nextPageId);
+    dataView.setInt32(HEADER_PAGE_ID_SIZE, this._nextPageId);
     dataView.setInt16(
-      TABLE_PAGE_HEADER_PAGE_ID_SIZE + TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE,
-      TABLE_PAGE_HEADER_SIZE +
-        this._tuples.length * TABLE_PAGE_LINE_POINTERS_SIZE
+      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE,
+      HEADER_SIZE + this._tuples.length * LINE_POINTERS_SIZE
     );
     let offset = PAGE_SIZE;
     for (let i = 0; i < this._tuples.length; ++i) {
@@ -66,39 +64,29 @@ export class TablePage extends Page {
       for (let j = 0; j < tupleSize; ++j) {
         dataView.setInt8(offset + j, tupleDataView.getInt8(j));
       }
+      dataView.setInt16(HEADER_SIZE + i * LINE_POINTERS_SIZE, offset);
       dataView.setInt16(
-        TABLE_PAGE_HEADER_SIZE + i * TABLE_PAGE_LINE_POINTERS_SIZE,
-        offset
-      );
-      dataView.setInt16(
-        TABLE_PAGE_HEADER_SIZE +
-          i * TABLE_PAGE_LINE_POINTERS_SIZE +
-          TABLE_PAGE_LINE_POINTER_OFFSET_SIZE,
+        HEADER_SIZE + i * LINE_POINTERS_SIZE + LINE_POINTER_OFFSET_SIZE,
         tupleSize
       );
     }
     dataView.setInt16(
-      TABLE_PAGE_HEADER_PAGE_ID_SIZE +
-        TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE +
-        TABLE_PAGE_HEADER_UPPER_OFFSET_SIZE,
+      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE + HEADER_UPPER_OFFSET_SIZE,
       offset
     );
     return buffer;
   }
   insertTuple(tuple: Tuple, transaction: Transaction): RID | null {
     const size = tuple.serialize().byteLength;
-    if (
-      PAGE_SIZE - TABLE_PAGE_HEADER_SIZE - TABLE_PAGE_LINE_POINTERS_SIZE <
-      size
-    ) {
+    if (PAGE_SIZE - HEADER_SIZE - LINE_POINTERS_SIZE < size) {
       throw new Error("Tuple is too large");
     }
-    if (this.freeSpaceSize() < TABLE_PAGE_LINE_POINTERS_SIZE + size) {
+    if (this.freeSpaceSize() < LINE_POINTERS_SIZE + size) {
       return null;
     }
     const nextRID = { pageId: this.pageId, slotId: this._tuples.length };
     this._tuples.push(tuple);
-    this._lowerOffset += TABLE_PAGE_LINE_POINTERS_SIZE;
+    this._lowerOffset += LINE_POINTERS_SIZE;
     this._upperOffset -= size;
     return nextRID;
   }
@@ -147,26 +135,19 @@ export class TablePageDeserializer implements PageDeserializer {
   deserialize(buffer: ArrayBuffer): TablePage {
     const dataView = new DataView(buffer);
     const pageId = dataView.getInt32(0);
-    const nextPageId = dataView.getInt32(TABLE_PAGE_HEADER_PAGE_ID_SIZE);
+    const nextPageId = dataView.getInt32(HEADER_PAGE_ID_SIZE);
     const lowerOffset = dataView.getInt16(
-      TABLE_PAGE_HEADER_PAGE_ID_SIZE + TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE
+      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE
     );
     const upperOffset = dataView.getInt16(
-      TABLE_PAGE_HEADER_PAGE_ID_SIZE +
-        TABLE_PAGE_HEADER_NEXT_PAGE_ID_SIZE +
-        TABLE_PAGE_HEADER_LOWER_OFFSET_SIZE
+      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE + HEADER_LOWER_OFFSET_SIZE
     );
-    const linePointerCount =
-      (lowerOffset - TABLE_PAGE_HEADER_SIZE) / TABLE_PAGE_LINE_POINTERS_SIZE;
+    const linePointerCount = (lowerOffset - HEADER_SIZE) / LINE_POINTERS_SIZE;
     const tuples: Array<Tuple | null> = [];
     for (let i = 0; i < linePointerCount; i++) {
-      const offset = dataView.getInt16(
-        TABLE_PAGE_HEADER_SIZE + i * TABLE_PAGE_LINE_POINTERS_SIZE
-      );
+      const offset = dataView.getInt16(HEADER_SIZE + i * LINE_POINTERS_SIZE);
       const size = dataView.getInt16(
-        TABLE_PAGE_HEADER_SIZE +
-          i * TABLE_PAGE_LINE_POINTERS_SIZE +
-          TABLE_PAGE_LINE_POINTER_OFFSET_SIZE
+        HEADER_SIZE + i * LINE_POINTERS_SIZE + LINE_POINTER_OFFSET_SIZE
       );
       if (size === 0) {
         tuples.push(null);
