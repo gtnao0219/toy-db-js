@@ -1,9 +1,9 @@
 import { IntegerValue } from "./integer_value";
 import { Type } from "./type";
-import { InlinedValue, Value } from "./value";
+import { Value } from "./value";
 import { VarcharValue } from "./varchar_value";
 
-export class BooleanValue extends InlinedValue {
+export class BooleanValue extends Value {
   constructor(private _value: boolean) {
     super();
   }
@@ -24,6 +24,9 @@ export class BooleanValue extends InlinedValue {
   }
   get type(): Type {
     return Type.BOOLEAN;
+  }
+  size(): number {
+    return 1;
   }
   serialize(): ArrayBuffer {
     const buffer = new ArrayBuffer(1);

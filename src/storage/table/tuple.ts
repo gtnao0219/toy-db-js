@@ -1,8 +1,8 @@
 import { Schema } from "../../catalog/schema";
 import { BooleanValue } from "../../type/boolean_value";
 import { IntegerValue } from "../../type/integer_value";
-import { Type, typeSize } from "../../type/type";
-import { Value, VariableValue } from "../../type/value";
+import { Type } from "../../type/type";
+import { Value } from "../../type/value";
 import { VarcharValue } from "../../type/varchar_value";
 
 export class Tuple {
@@ -14,75 +14,52 @@ export class Tuple {
     return this._schema;
   }
   serialize(): ArrayBuffer {
-    const inlineValuesSize = this._schema.columns.reduce(
-      (acc, column) => acc + typeSize(column.type),
-      0
-    );
-    const variableValuesSize = this._schema.columns.reduce((acc, _, index) => {
-      const value = this._values[index];
-      if (value instanceof VariableValue) {
-        return acc + value.size();
-      }
-      return acc;
+    const size = this._values.reduce((acc, value) => {
+      return acc + value.size();
     }, 0);
-    const size = inlineValuesSize + variableValuesSize;
     const buffer = new ArrayBuffer(size);
     const dataView = new DataView(buffer);
     let offset = 0;
-    let variableValueOffset = inlineValuesSize;
     this._values.forEach((value) => {
-      if (value instanceof VariableValue) {
-        const inlineBuffer = value.serializeInline(variableValueOffset);
-        const inlineDataView = new DataView(inlineBuffer);
-        for (let i = 0; i < inlineDataView.byteLength; ++i) {
-          dataView.setInt8(offset, inlineDataView.getInt8(i));
-          ++offset;
-        }
-        const variableBuffer = value.serialize();
-        const variableDataView = new DataView(variableBuffer);
-        for (let i = 0; i < variableDataView.byteLength; ++i) {
-          dataView.setInt8(variableValueOffset, variableDataView.getInt8(i));
-          ++variableValueOffset;
-        }
-      } else {
-        const valueBuffer = value.serialize();
-        const valueDataView = new DataView(valueBuffer);
-        for (let i = 0; i < valueBuffer.byteLength; ++i) {
-          dataView.setInt8(offset, valueDataView.getInt8(i));
-          ++offset;
-        }
+      const valueBuffer = value.serialize();
+      const valueDataView = new DataView(valueBuffer);
+      for (let i = 0; i < valueBuffer.byteLength; ++i) {
+        dataView.setInt8(offset, valueDataView.getInt8(i));
+        ++offset;
       }
     });
     return buffer;
+  }
+  static deserialize(buffer: ArrayBuffer, schema: Schema): Tuple {
+    const values: Value[] = [];
+    let offset = 0;
+    schema.columns.forEach((column) => {
+      switch (column.type) {
+        case Type.INTEGER: {
+          const value = IntegerValue.deserialize(buffer, offset);
+          values.push(value);
+          offset += value.size();
+          break;
+        }
+        case Type.BOOLEAN: {
+          const value = BooleanValue.deserialize(buffer, offset);
+          values.push(value);
+          offset += value.size();
+          break;
+        }
+        case Type.VARCHAR: {
+          const value = VarcharValue.deserialize(buffer, offset);
+          values.push(value);
+          offset += value.size();
+          break;
+        }
+      }
+    });
+    return new Tuple(schema, values);
   }
   toJSON() {
     return {
       values: this._values,
     };
   }
-}
-
-export function deserializeTuple(buffer: ArrayBuffer, schema: Schema): Tuple {
-  const values: Value[] = [];
-  let offset = 0;
-  schema.columns.forEach((column) => {
-    switch (column.type) {
-      case Type.INTEGER: {
-        values.push(IntegerValue.deserialize(buffer, offset));
-        offset += typeSize(Type.INTEGER);
-        break;
-      }
-      case Type.BOOLEAN: {
-        values.push(BooleanValue.deserialize(buffer, offset));
-        offset += typeSize(Type.INTEGER);
-        break;
-      }
-      case Type.VARCHAR: {
-        values.push(VarcharValue.deserialize(buffer, offset));
-        offset += typeSize(Type.VARCHAR);
-        break;
-      }
-    }
-  });
-  return new Tuple(schema, values);
 }

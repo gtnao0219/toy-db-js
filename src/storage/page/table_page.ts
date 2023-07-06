@@ -2,7 +2,7 @@ import { Catalog } from "../../catalog/catalog";
 import { Schema } from "../../catalog/schema";
 import { RID } from "../../common/RID";
 import { Transaction } from "../../concurrency/transaction";
-import { Tuple, deserializeTuple } from "../table/tuple";
+import { Tuple } from "../table/tuple";
 import {
   INVALID_PAGE_ID,
   PAGE_SIZE,
@@ -224,7 +224,7 @@ export class TablePageDeserializer implements PageDeserializer {
         continue;
       }
       const tupleBuffer = buffer.slice(offset, offset + size);
-      tuples.push(deserializeTuple(tupleBuffer, this._schema));
+      tuples.push(Tuple.deserialize(tupleBuffer, this._schema));
     }
     return new TablePage(
       pageId,

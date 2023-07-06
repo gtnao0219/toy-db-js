@@ -5,11 +5,10 @@ import {
   TablePage,
   TablePageDeserializerUsingCatalog,
 } from "../storage/page/table_page";
-import { deserializeTuple } from "../storage/table/tuple";
+import { Tuple } from "../storage/table/tuple";
 import {
   BeginLogRecord,
   CommitLogRecord,
-  AbortLogRecord,
   InsertLogRecord,
   LogRecord,
   UpdateLogRecord,
@@ -90,13 +89,13 @@ async function redo(
       if (page.lsn < log.lsn) {
         if (log instanceof InsertLogRecord) {
           console.log(`Redo insert: ${log.rid}`);
-          const tuple = deserializeTuple(log.tupleData, page.schema);
+          const tuple = Tuple.deserialize(log.tupleData, page.schema);
           page.insertTuple(tuple, null);
           page.lsn = log.lsn;
         }
         if (log instanceof UpdateLogRecord) {
           console.log(`Redo update: ${log.rid}`);
-          const tuple = deserializeTuple(log.newTupleData, page.schema);
+          const tuple = Tuple.deserialize(log.newTupleData, page.schema);
           page.updateTuple(log.rid, tuple, null);
           page.lsn = log.lsn;
         }
@@ -150,7 +149,7 @@ async function undo(
           page.applyDelete(log.rid, null);
         }
         if (log instanceof UpdateLogRecord) {
-          const tuple = deserializeTuple(log.oldTupleData, page.schema);
+          const tuple = Tuple.deserialize(log.oldTupleData, page.schema);
           console.log(`Undo update: ${tuple}`);
           page.updateTuple(log.rid, tuple, null);
         }
@@ -163,7 +162,7 @@ async function undo(
           page.markDelete(log.rid, null);
         }
         if (log instanceof ApplyDeleteLogRecord) {
-          const tuple = deserializeTuple(log.tupleData, page.schema);
+          const tuple = Tuple.deserialize(log.tupleData, page.schema);
           console.log(`Undo apply delete: ${tuple}`);
           page.insertTuple(tuple, null);
         }

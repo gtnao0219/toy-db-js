@@ -1,18 +1,19 @@
 import { BooleanValue } from "./boolean_value";
 import { IntegerValue } from "./integer_value";
 import { Type } from "./type";
-import { Value, VariableValue } from "./value";
+import { Value } from "./value";
 
-export class VarcharValue extends VariableValue {
+const SIZE_SIZE = 4;
+
+export class VarcharValue extends Value {
   constructor(private _value: string) {
     super();
   }
   static deserialize(buffer: ArrayBuffer, offset: number): VarcharValue {
-    const { offset: variableOffset, size: variableSize } =
-      this.deserializeInline(buffer, offset);
-    const value = new TextDecoder().decode(
-      buffer.slice(variableOffset, variableOffset + variableSize)
-    );
+    const dataView = new DataView(buffer);
+    const length = dataView.getInt32(offset);
+    const uint8Array = new Uint8Array(buffer, offset + SIZE_SIZE, length);
+    const value = new TextDecoder().decode(uint8Array);
     return new VarcharValue(value);
   }
   get value(): string {
@@ -22,13 +23,18 @@ export class VarcharValue extends VariableValue {
     return Type.VARCHAR;
   }
   size(): number {
+    return SIZE_SIZE + this.variableSize();
+  }
+  variableSize() {
     return new TextEncoder().encode(this._value).length;
   }
   serialize(): ArrayBuffer {
-    const uint8Array = new TextEncoder().encode(this._value);
-    const buffer = new ArrayBuffer(uint8Array.length);
-    const dataView = new Uint8Array(buffer);
-    dataView.set(uint8Array);
+    const size = this.variableSize();
+    const buffer = new ArrayBuffer(SIZE_SIZE + size);
+    const dataView = new DataView(buffer);
+    dataView.setInt32(0, size);
+    const uint8Array = new Uint8Array(buffer, SIZE_SIZE, size);
+    new TextEncoder().encodeInto(this._value, uint8Array);
     return buffer;
   }
   castAs(type: Type): Value {
