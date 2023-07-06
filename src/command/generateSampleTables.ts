@@ -10,6 +10,8 @@ import { ExecutorEngine } from "../execution/executor_engine";
 import { PlanNode } from "../execution/plan";
 import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
+import { nextTransactionIdAndLsn } from "../recovery/log_recovery";
+import { LogManager } from "../recovery/log_manager";
 import { DiskManagerImpl } from "../storage/disk/disk_manager";
 import { Type } from "../type/type";
 
@@ -18,22 +20,32 @@ import { Type } from "../type/type";
   const mustInitialize = !diskManager.existsDataFile();
   if (mustInitialize) {
     await diskManager.createDataFile();
+    await diskManager.createLogFile();
   }
   const bufferPoolManager = new BufferPoolManagerImpl(diskManager);
   const lockManager = new LockManager();
-  const transactionManager = new TransactionManager(lockManager);
-  const catalog = new Catalog(bufferPoolManager);
+  const [nextTransactionId, nextLsn] = await nextTransactionIdAndLsn(
+    diskManager
+  );
+  const logManager = new LogManager(diskManager, nextLsn);
+  const transactionManager = new TransactionManager(
+    lockManager,
+    logManager,
+    nextTransactionId
+  );
+  const catalog = new Catalog(bufferPoolManager, logManager);
   if (mustInitialize) {
-    const transaction = transactionManager.begin();
+    const transaction = await transactionManager.begin();
     await catalog.initialize(transaction);
-    transactionManager.commit(transaction);
+    await transactionManager.commit(transaction);
   }
+  await catalog.setupNextOid();
   const executorEngine = new ExecutorEngine(
     bufferPoolManager,
     transactionManager,
     catalog
   );
-  const transaction = transactionManager.begin();
+  const transaction = await transactionManager.begin();
   const executorContext = new ExecutorContext(
     transaction,
     bufferPoolManager,
@@ -98,7 +110,7 @@ import { Type } from "../type/type";
     const plan = await generatePlan(sql, catalog);
     await executorEngine.execute(executorContext, plan);
   }
-  transactionManager.commit(transaction);
+  await transactionManager.commit(transaction);
   await bufferPoolManager.flushAllPages();
 })();
 

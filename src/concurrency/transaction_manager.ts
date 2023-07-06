@@ -1,13 +1,24 @@
 import { RID } from "../common/RID";
-import { Debuggable } from "../common/common";
+import { LogManager } from "../recovery/log_manager";
+import {
+  AbortLogRecord,
+  BeginLogRecord,
+  CommitLogRecord,
+} from "../recovery/log_record";
 import { LockManager } from "./lock_manager";
 import { Transaction, TransactionState, WriteType } from "./transaction";
 
-export class TransactionManager implements Debuggable {
+export class TransactionManager {
   // TODO: read from storage
-  private _nextTransactionId: number = 0;
   private _transactionMap: Map<number, Transaction> = new Map();
-  constructor(private _lockManager: LockManager) {}
+  constructor(
+    private _lockManager: LockManager,
+    private _logManager: LogManager,
+    private _nextTransactionId: number = 0
+  ) {}
+  set nextTransactionId(nextTransactionId: number) {
+    this._nextTransactionId = nextTransactionId;
+  }
   getTransaction(transactionId: number): Transaction | null {
     const transaction = this._transactionMap.get(transactionId);
     if (transaction === undefined) {
@@ -15,12 +26,18 @@ export class TransactionManager implements Debuggable {
     }
     return transaction;
   }
-  begin(): Transaction {
+  async begin(): Promise<Transaction> {
     const transaction = new Transaction(this._nextTransactionId++);
     this._transactionMap.set(transaction.transactionId, transaction);
+
+    const lsn = await this._logManager.appendLogRecord(
+      new BeginLogRecord(-1, transaction.prevLsn, transaction.transactionId)
+    );
+    transaction.prevLsn = lsn;
+
     return transaction;
   }
-  commit(transaction: Transaction) {
+  async commit(transaction: Transaction) {
     console.log("commit", transaction.transactionId);
     transaction.state = TransactionState.COMMITTED;
     transaction.writeRecords.forEach((writeRecord) => {
@@ -30,9 +47,16 @@ export class TransactionManager implements Debuggable {
           break;
       }
     });
+
+    const lsn = await this._logManager.appendLogRecord(
+      new CommitLogRecord(-1, transaction.prevLsn, transaction.transactionId)
+    );
+    transaction.prevLsn = lsn;
+    this._logManager.flush();
+
     this.releaseLocks(transaction);
   }
-  abort(transaction: Transaction) {
+  async abort(transaction: Transaction) {
     transaction.state = TransactionState.ABORTED;
     transaction.writeRecords.forEach((writeRecord) => {
       switch (writeRecord.writeType) {
@@ -54,6 +78,12 @@ export class TransactionManager implements Debuggable {
           break;
       }
     });
+
+    const lsn = await this._logManager.appendLogRecord(
+      new AbortLogRecord(-1, transaction.prevLsn, transaction.transactionId)
+    );
+    transaction.prevLsn = lsn;
+
     this.releaseLocks(transaction);
   }
   private releaseLocks(transaction: Transaction) {
@@ -91,12 +121,12 @@ export class TransactionManager implements Debuggable {
       this._lockManager.unlockTable(transaction, oid);
     });
   }
-  debug(): object {
+  toJSON() {
     return {
       nextTransactionId: this._nextTransactionId,
       transactionMap: Array.from(this._transactionMap.entries()).map(
         ([_, transaction]) => {
-          return transaction.debug();
+          return transaction;
         }
       ),
     };

@@ -61,4 +61,7 @@ export class BooleanValue extends InlinedValue {
   performNot(): BooleanValue {
     return new BooleanValue(!this._value);
   }
+  toJSON() {
+    return this._value;
+  }
 }

@@ -5,4 +5,9 @@ export class Schema {
   get columns(): Column[] {
     return this._columns;
   }
+  toJSON() {
+    return {
+      columns: this._columns,
+    };
+  }
 }

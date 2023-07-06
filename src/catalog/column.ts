@@ -8,4 +8,10 @@ export class Column {
   get type(): Type {
     return this._type;
   }
+  toJSON() {
+    return {
+      name: this._name,
+      type: this._type,
+    };
+  }
 }

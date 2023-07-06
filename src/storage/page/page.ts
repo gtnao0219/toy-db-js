@@ -16,7 +16,7 @@ export abstract class Page {
 }
 
 export interface PageDeserializer {
-  deserialize(arrayBuffer: ArrayBuffer): Page;
+  deserialize(arrayBuffer: ArrayBuffer): Promise<Page>;
 }
 export interface PageGenerator {
   generate(pageId: number): Page;

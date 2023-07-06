@@ -94,7 +94,7 @@ class TestPage extends Page {
   }
 }
 class TestPageDeserializer implements PageDeserializer {
-  deserialize(buffer: ArrayBuffer): Page {
+  async deserialize(buffer: ArrayBuffer): Promise<TestPage> {
     const dataView = new DataView(buffer);
     const pageId = dataView.getInt32(0);
     const testData = dataView.getInt32(4);

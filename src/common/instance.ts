@@ -11,18 +11,20 @@ import { ExecutorContext } from "../execution/executor_context";
 import { ExecutorEngine } from "../execution/executor_engine";
 import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
+import { nextTransactionIdAndLsn, recover } from "../recovery/log_recovery";
+import { LogManager } from "../recovery/log_manager";
 import { DiskManager, DiskManagerImpl } from "../storage/disk/disk_manager";
 import { Tuple } from "../storage/table/tuple";
-import { Debuggable } from "./common";
 
 export type SQLResult = {
   transactionId: number | null;
   rows: Tuple[];
 };
 
-export class Instance implements Debuggable {
+export class Instance {
   private _diskManager: DiskManager;
   private _bufferPoolManager: BufferPoolManager;
+  private _logManager: LogManager;
   private _lockManager: LockManager;
   private _transactionManager: TransactionManager;
   private _catalog: Catalog;
@@ -30,9 +32,13 @@ export class Instance implements Debuggable {
   constructor() {
     this._diskManager = new DiskManagerImpl();
     this._bufferPoolManager = new BufferPoolManagerImpl(this._diskManager);
+    this._logManager = new LogManager(this._diskManager);
     this._lockManager = new LockManager();
-    this._transactionManager = new TransactionManager(this._lockManager);
-    this._catalog = new Catalog(this._bufferPoolManager);
+    this._transactionManager = new TransactionManager(
+      this._lockManager,
+      this._logManager
+    );
+    this._catalog = new Catalog(this._bufferPoolManager, this._logManager);
     this._executorEngine = new ExecutorEngine(
       this._bufferPoolManager,
       this._transactionManager,
@@ -43,10 +49,19 @@ export class Instance implements Debuggable {
     const mustInitialize = !this._diskManager.existsDataFile();
     if (mustInitialize) {
       await this._diskManager.createDataFile();
-      const transaction = this._transactionManager.begin();
+      await this._diskManager.createLogFile();
+      const transaction = await this._transactionManager.begin();
       await this._catalog.initialize(transaction);
-      this._transactionManager.commit(transaction);
+      await this._transactionManager.commit(transaction);
     }
+    await this._catalog.setupNextOid();
+    const [nextTransactionId, nextLsn] = await nextTransactionIdAndLsn(
+      this._diskManager
+    );
+    this._transactionManager.nextTransactionId = nextTransactionId;
+    this._logManager.nextLsn = nextLsn;
+
+    await recover(this._diskManager, this._bufferPoolManager, this._catalog);
   }
   async executeSQL(
     sql: string,
@@ -57,7 +72,7 @@ export class Instance implements Debuggable {
 
     const transaction: Transaction =
       transactionId == null
-        ? this._transactionManager.begin()
+        ? await this._transactionManager.begin()
         : this._transactionManager.getTransaction(transactionId)!;
     console.log("transactionId", transaction.transactionId);
     switch (ast.type) {
@@ -67,13 +82,13 @@ export class Instance implements Debuggable {
           rows: [],
         };
       case "commit_statement":
-        this._transactionManager.commit(transaction);
+        await this._transactionManager.commit(transaction);
         return {
           transactionId: null,
           rows: [],
         };
       case "rollback_statement":
-        this._transactionManager.abort(transaction);
+        await this._transactionManager.abort(transaction);
         return {
           transactionId: null,
           rows: [],
@@ -109,9 +124,8 @@ export class Instance implements Debuggable {
       executorContext,
       planNode
     );
-    console.log("tuples", tuples);
     if (transactionId == null) {
-      this._transactionManager.commit(transaction);
+      await this._transactionManager.commit(transaction);
     }
     return {
       transactionId: transactionId == null ? null : transaction.transactionId,
@@ -120,12 +134,11 @@ export class Instance implements Debuggable {
   }
   async shutdown(): Promise<void> {
     await this._bufferPoolManager.flushAllPages();
+    await this._logManager.flush();
   }
-  debug(): object {
+  toJSON() {
     return {
-      // bufferPoolManager: this._bufferPoolManager.debug(),
-      lockManager: this._lockManager.debug(),
-      transactionManager: this._transactionManager.debug(),
+      bufferPoolManager: this._bufferPoolManager,
     };
   }
 }

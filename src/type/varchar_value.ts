@@ -59,4 +59,7 @@ export class VarcharValue extends VariableValue {
   performGreaterThanEqual(right: VarcharValue): BooleanValue {
     return new BooleanValue(this._value >= right.value);
   }
+  toJSON() {
+    return this._value;
+  }
 }

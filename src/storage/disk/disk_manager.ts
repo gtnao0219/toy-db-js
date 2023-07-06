@@ -3,18 +3,25 @@ import { PAGE_SIZE } from "../page/page";
 import Mutex from "../../../node_modules/async-mutex/lib/Mutex";
 
 const DEFAULT_DATA_FILE_NAME = "data";
+const DEFAULT_LOG_FILE_NAME = "log";
 
 export interface DiskManager {
   existsDataFile(): boolean;
   createDataFile(): Promise<boolean>;
+  createLogFile(): Promise<boolean>;
   readPage(pageId: number): Promise<ArrayBuffer>;
   writePage(pageId: number, buffer: ArrayBuffer): Promise<void>;
+  readLog(): Promise<ArrayBuffer>;
+  writeLog(buffer: ArrayBuffer): Promise<void>;
   allocatePageId(): Promise<number>;
 }
 
 export class DiskManagerImpl implements DiskManager {
   private _mutex: Mutex;
-  constructor(private _data_file_name: string = DEFAULT_DATA_FILE_NAME) {
+  constructor(
+    private _data_file_name: string = DEFAULT_DATA_FILE_NAME,
+    private _log_file_name: string = DEFAULT_LOG_FILE_NAME
+  ) {
     this._mutex = new Mutex();
   }
   existsDataFile(): boolean {
@@ -30,6 +37,12 @@ export class DiskManagerImpl implements DiskManager {
     await fd.close();
     return true;
   }
+  async createLogFile(): Promise<boolean> {
+    const fd = await fsp.open(this._log_file_name, "w");
+    await fd.write(new Uint8Array(new ArrayBuffer(0)), 0, 0);
+    await fd.close();
+    return true;
+  }
   async readPage(pageId: number): Promise<ArrayBuffer> {
     const buffer = new ArrayBuffer(PAGE_SIZE);
     const view = new DataView(buffer);
@@ -41,6 +54,18 @@ export class DiskManagerImpl implements DiskManager {
   async writePage(pageId: number, buffer: ArrayBuffer): Promise<void> {
     const fd = await fsp.open(this._data_file_name, "r+");
     await fd.write(new Uint8Array(buffer), 0, PAGE_SIZE, pageId * PAGE_SIZE);
+    await fd.close();
+  }
+  async readLog(): Promise<ArrayBuffer> {
+    const fd = await fsp.open(this._log_file_name, "r");
+    const buffer = new ArrayBuffer((await fd.stat()).size);
+    await fd.read(new DataView(buffer), 0, buffer.byteLength, 0);
+    await fd.close();
+    return buffer;
+  }
+  async writeLog(buffer: ArrayBuffer): Promise<void> {
+    const fd = await fsp.open(this._log_file_name, "a");
+    await fd.appendFile(new Uint8Array(buffer));
     await fd.close();
   }
   async allocatePageId(): Promise<number> {

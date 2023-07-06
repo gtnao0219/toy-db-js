@@ -55,6 +55,11 @@ export class Tuple {
     });
     return buffer;
   }
+  toJSON() {
+    return {
+      values: this._values,
+    };
+  }
 }
 
 export function deserializeTuple(buffer: ArrayBuffer, schema: Schema): Tuple {

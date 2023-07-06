@@ -58,7 +58,7 @@ describe("HeaderPage", () => {
 });
 
 describe("HeaderPageDeserializer", () => {
-  test("deserialize", () => {
+  test("deserialize", async () => {
     const buffer = new ArrayBuffer(28);
     const dataView = new DataView(buffer);
     dataView.setInt32(0, 1);
@@ -68,7 +68,7 @@ describe("HeaderPageDeserializer", () => {
     dataView.setInt32(16, 3);
     dataView.setInt32(20, 2);
     dataView.setInt32(24, 4);
-    const headerPage = new HeaderPageDeserializer().deserialize(buffer);
+    const headerPage = await new HeaderPageDeserializer().deserialize(buffer);
     expect(headerPage.pageId).toBe(1);
     expect(headerPage.nextPageId).toBe(2);
     expect(headerPage.entries).toEqual([

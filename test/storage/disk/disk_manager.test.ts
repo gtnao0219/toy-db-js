@@ -97,6 +97,32 @@ describe("DiskManagerImpl", () => {
       await fsp.unlink("test/data/disk_manager/test_page_write_data");
     });
   });
+  describe("readLog and writeLog", () => {
+    it("reads and writes log", async () => {
+      await fsp.copyFile(
+        "test/data/disk_manager/empty_log",
+        "test/data/disk_manager/temp_log"
+      );
+      const diskManager = new DiskManagerImpl(
+        "test/data/disk_manager/empty_data",
+        "test/data/disk_manager/temp_log"
+      );
+      const buffer = new ArrayBuffer(4);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < view.length; i++) {
+        view[i] = i;
+      }
+      await diskManager.writeLog(buffer);
+      const logBuffer = await diskManager.readLog();
+      console.log(logBuffer);
+      const logView = new Uint8Array(logBuffer);
+      for (let i = 0; i < logView.length; i++) {
+        expect(logView[i]).toBe(i);
+      }
+      // Cleanup
+      await fsp.unlink("test/data/disk_manager/temp_log");
+    });
+  });
   describe("allocatePageId", () => {
     it("returns 0 if data file is empty", async () => {
       // copy test data file

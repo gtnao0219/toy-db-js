@@ -20,7 +20,7 @@ export enum WriteType {
   DELETE,
   UPDATE,
 }
-export class TransactionWriteRecord implements Debuggable {
+export class TransactionWriteRecord {
   constructor(
     private _writeType: WriteType,
     private _rid: RID,
@@ -39,7 +39,7 @@ export class TransactionWriteRecord implements Debuggable {
   get tableHeap(): TableHeap {
     return this._tableHeap;
   }
-  debug(): object {
+  toJSON() {
     return {
       writeType: this._writeType,
       rid: this._rid,
@@ -58,7 +58,7 @@ type TransactionLocks = {
   sharedIntentionExclusiveTableLock: number[];
 };
 
-export class Transaction implements Debuggable {
+export class Transaction {
   private _state: TransactionState = TransactionState.GROWING;
   private _writeRecords: TransactionWriteRecord[] = [];
   private _locks: TransactionLocks = {
@@ -70,6 +70,7 @@ export class Transaction implements Debuggable {
     intentionExclusiveTableLock: [],
     sharedIntentionExclusiveTableLock: [],
   };
+  private _prevLsn: number = -1;
   constructor(
     private _transactionId: number,
     private _isolationLevel: IsolationLevel = IsolationLevel.REPEATABLE_READ
@@ -91,6 +92,12 @@ export class Transaction implements Debuggable {
   }
   get locks(): TransactionLocks {
     return this._locks;
+  }
+  get prevLsn(): number {
+    return this._prevLsn;
+  }
+  set prevLsn(lsn: number) {
+    this._prevLsn = lsn;
   }
   addWriteRecord(
     writeType: WriteType,
@@ -227,13 +234,14 @@ export class Transaction implements Debuggable {
       this.locks.sharedIntentionExclusiveTableLock.includes(tableOid)
     );
   }
-  debug(): object {
+  toJSON() {
     return {
       transactionId: this.transactionId,
       isolationLevel: this.isolationLevel,
       state: this.state,
-      writeRecords: this.writeRecords.map((wr) => wr.debug()),
+      writeRecords: this.writeRecords,
       locks: this.locks,
+      prevLsn: this.prevLsn,
     };
   }
 }

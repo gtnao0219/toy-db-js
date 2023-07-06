@@ -1,3 +1,4 @@
+import { Catalog } from "../../catalog/catalog";
 import { Schema } from "../../catalog/schema";
 import { RID } from "../../common/RID";
 import { Transaction } from "../../concurrency/transaction";
@@ -11,11 +12,15 @@ import {
 } from "./page";
 
 const HEADER_PAGE_ID_SIZE = 4;
+const HEADER_OID_SIZE = 4;
+const HEADER_LSN_SIZE = 4;
 const HEADER_NEXT_PAGE_ID_SIZE = 4;
 const HEADER_LOWER_OFFSET_SIZE = 2;
 const HEADER_UPPER_OFFSET_SIZE = 2;
 const HEADER_SIZE =
   HEADER_PAGE_ID_SIZE +
+  HEADER_OID_SIZE +
+  HEADER_LSN_SIZE +
   HEADER_NEXT_PAGE_ID_SIZE +
   HEADER_LOWER_OFFSET_SIZE +
   HEADER_UPPER_OFFSET_SIZE;
@@ -26,6 +31,9 @@ const LINE_POINTERS_SIZE = LINE_POINTER_OFFSET_SIZE + LINE_POINTER_SIZE_SIZE;
 export class TablePage extends Page {
   constructor(
     protected _pageId: number = INVALID_PAGE_ID,
+    private _oid: number = -1,
+    private _schema: Schema,
+    private _lsn: number = -1,
     private _nextPageId: number = INVALID_PAGE_ID,
     private _tuples: Array<Tuple | null> = [],
     private _lowerOffset: number = HEADER_SIZE,
@@ -34,6 +42,18 @@ export class TablePage extends Page {
     private _deleteMarkedSet: Set<RID> = new Set()
   ) {
     super(_pageId);
+  }
+  get schema(): Schema {
+    return this._schema;
+  }
+  get oid(): number {
+    return this._oid;
+  }
+  get lsn(): number {
+    return this._lsn;
+  }
+  set lsn(lsn: number) {
+    this._lsn = lsn;
   }
   get nextPageId(): number {
     return this._nextPageId;
@@ -48,9 +68,17 @@ export class TablePage extends Page {
     const buffer = new ArrayBuffer(PAGE_SIZE);
     const dataView = new DataView(buffer);
     dataView.setInt32(0, this.pageId);
-    dataView.setInt32(HEADER_PAGE_ID_SIZE, this._nextPageId);
+    dataView.setInt32(HEADER_PAGE_ID_SIZE, this._oid);
+    dataView.setInt32(HEADER_PAGE_ID_SIZE + HEADER_OID_SIZE, this._lsn);
+    dataView.setInt32(
+      HEADER_PAGE_ID_SIZE + HEADER_OID_SIZE + HEADER_LSN_SIZE,
+      this._nextPageId
+    );
     dataView.setInt16(
-      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE,
+      HEADER_PAGE_ID_SIZE +
+        HEADER_OID_SIZE +
+        HEADER_LSN_SIZE +
+        HEADER_NEXT_PAGE_ID_SIZE,
       HEADER_SIZE + this._tuples.length * LINE_POINTERS_SIZE
     );
     let offset = PAGE_SIZE;
@@ -71,12 +99,16 @@ export class TablePage extends Page {
       );
     }
     dataView.setInt16(
-      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE + HEADER_UPPER_OFFSET_SIZE,
+      HEADER_PAGE_ID_SIZE +
+        HEADER_OID_SIZE +
+        HEADER_LSN_SIZE +
+        HEADER_NEXT_PAGE_ID_SIZE +
+        HEADER_UPPER_OFFSET_SIZE,
       offset
     );
     return buffer;
   }
-  insertTuple(tuple: Tuple, transaction: Transaction): RID | null {
+  insertTuple(tuple: Tuple, transaction: Transaction | null): RID | null {
     const size = tuple.serialize().byteLength;
     if (PAGE_SIZE - HEADER_SIZE - LINE_POINTERS_SIZE < size) {
       throw new Error("Tuple is too large");
@@ -90,10 +122,10 @@ export class TablePage extends Page {
     this._upperOffset -= size;
     return nextRID;
   }
-  markDelete(rid: RID, transaction: Transaction): void {
+  markDelete(rid: RID, transaction: Transaction | null): void {
     this._deleteMarkedSet.add(rid);
   }
-  applyDelete(rid: RID, transaction: Transaction): void {
+  applyDelete(rid: RID, transaction: Transaction | null): void {
     const oldTuple = this._tuples[rid.slotId];
     if (oldTuple == null) {
       throw new Error("Tuple is already deleted");
@@ -102,10 +134,14 @@ export class TablePage extends Page {
     this._tuples[rid.slotId] = null;
     this._upperOffset += oldSize;
   }
-  rollbackDelete(rid: RID, transaction: Transaction): void {
+  rollbackDelete(rid: RID, transaction: Transaction | null): void {
     this._deleteMarkedSet.delete(rid);
   }
-  updateTuple(rid: RID, newTuple: Tuple, transaction: Transaction): boolean {
+  updateTuple(
+    rid: RID,
+    newTuple: Tuple,
+    transaction: Transaction | null
+  ): boolean {
     const oldTuple = this._tuples[rid.slotId];
     if (oldTuple == null) {
       throw new Error("Tuple not found");
@@ -125,22 +161,56 @@ export class TablePage extends Page {
   isMarkedDelete(rid: RID): boolean {
     return this._deleteMarkedSet.has(rid);
   }
+  toJSON() {
+    return {
+      pageId: this.pageId,
+      oid: this._oid,
+      lsn: this._lsn,
+      nextPageId: this._nextPageId,
+      tuples: this._tuples,
+      lowerOffset: this._lowerOffset,
+      upperOffset: this._upperOffset,
+      deleteMarkedSet: this._deleteMarkedSet,
+    };
+  }
   private freeSpaceSize(): number {
     return this._upperOffset - this._lowerOffset;
   }
 }
 
+export class TablePageDeserializerUsingCatalog {
+  constructor(private _catalog: Catalog) {}
+  async deserialize(buffer: ArrayBuffer): Promise<TablePage> {
+    const dataView = new DataView(buffer);
+    const oid = dataView.getInt32(HEADER_PAGE_ID_SIZE);
+    const schema = await this._catalog.getSchemaByOid(oid);
+    const tablePageDeserializer = new TablePageDeserializer(schema);
+    return tablePageDeserializer.deserialize(buffer);
+  }
+}
+
 export class TablePageDeserializer implements PageDeserializer {
   constructor(private _schema: Schema) {}
-  deserialize(buffer: ArrayBuffer): TablePage {
+  async deserialize(buffer: ArrayBuffer): Promise<TablePage> {
     const dataView = new DataView(buffer);
     const pageId = dataView.getInt32(0);
-    const nextPageId = dataView.getInt32(HEADER_PAGE_ID_SIZE);
+    const oid = dataView.getInt32(HEADER_PAGE_ID_SIZE);
+    const lsn = dataView.getInt32(HEADER_PAGE_ID_SIZE + HEADER_OID_SIZE);
+    const nextPageId = dataView.getInt32(
+      HEADER_PAGE_ID_SIZE + HEADER_OID_SIZE + HEADER_LSN_SIZE
+    );
     const lowerOffset = dataView.getInt16(
-      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE
+      HEADER_PAGE_ID_SIZE +
+        HEADER_OID_SIZE +
+        HEADER_LSN_SIZE +
+        HEADER_NEXT_PAGE_ID_SIZE
     );
     const upperOffset = dataView.getInt16(
-      HEADER_PAGE_ID_SIZE + HEADER_NEXT_PAGE_ID_SIZE + HEADER_LOWER_OFFSET_SIZE
+      HEADER_PAGE_ID_SIZE +
+        HEADER_OID_SIZE +
+        HEADER_LSN_SIZE +
+        HEADER_NEXT_PAGE_ID_SIZE +
+        HEADER_LOWER_OFFSET_SIZE
     );
     const linePointerCount = (lowerOffset - HEADER_SIZE) / LINE_POINTERS_SIZE;
     const tuples: Array<Tuple | null> = [];
@@ -156,12 +226,22 @@ export class TablePageDeserializer implements PageDeserializer {
       const tupleBuffer = buffer.slice(offset, offset + size);
       tuples.push(deserializeTuple(tupleBuffer, this._schema));
     }
-    return new TablePage(pageId, nextPageId, tuples, lowerOffset, upperOffset);
+    return new TablePage(
+      pageId,
+      oid,
+      this._schema,
+      lsn,
+      nextPageId,
+      tuples,
+      lowerOffset,
+      upperOffset
+    );
   }
 }
 
 export class TablePageGenerator implements PageGenerator {
+  constructor(private _oid: number, private _schema: Schema) {}
   generate(pageId: number): TablePage {
-    return new TablePage(pageId);
+    return new TablePage(pageId, this._oid, this._schema);
   }
 }

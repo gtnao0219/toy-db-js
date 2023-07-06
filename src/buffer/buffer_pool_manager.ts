@@ -39,7 +39,9 @@ export class BufferPoolManagerImpl implements BufferPoolManager {
     }
     const availableFrameId = await this.getAvailableFrameId();
     const buffer = await this._diskManager.readPage(pageId);
-    const bufferedPage = new BufferedPage(pageDeserializer.deserialize(buffer));
+    const bufferedPage = new BufferedPage(
+      await pageDeserializer.deserialize(buffer)
+    );
     this._pages[availableFrameId] = bufferedPage;
     this._pageTable.set(pageId, availableFrameId);
     bufferedPage.addPinCount();
@@ -114,5 +116,10 @@ export class BufferPoolManagerImpl implements BufferPoolManager {
     }
     this._pageTable.delete(page.pageId);
     return frameId;
+  }
+  toJSON() {
+    return {
+      pages: this._pages.map((page) => (page == null ? null : page)),
+    };
   }
 }

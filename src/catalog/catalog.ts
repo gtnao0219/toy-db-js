@@ -1,12 +1,13 @@
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Transaction } from "../concurrency/transaction";
+import { LogManager } from "../recovery/log_manager";
 import {
   HeaderPage,
   HeaderPageDeserializer,
   HeaderPageEntry,
   HeaderPageGenerator,
 } from "../storage/page/header_page";
-import { INVALID_PAGE_ID, PageType } from "../storage/page/page";
+import { INVALID_PAGE_ID } from "../storage/page/page";
 import { TableHeap } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
 import { IntegerValue } from "../type/integer_value";
@@ -37,17 +38,23 @@ export interface ICatalog {
 }
 
 export class Catalog implements ICatalog {
-  constructor(private _bufferPoolManager: BufferPoolManager) {}
-  // TODO: Refactor
-  async nextOid(): Promise<number> {
+  private _nextOid: number = 0;
+  constructor(
+    private _bufferPoolManager: BufferPoolManager,
+    private _logManager: LogManager
+  ) {}
+  async setupNextOid(): Promise<void> {
     const entries = await this.headerPageEntries();
-    let maxOid = 0;
+    let maxOid = -1;
     for (const entry of entries) {
       if (entry.oid > maxOid) {
         maxOid = entry.oid;
       }
     }
-    return maxOid + 1;
+    this._nextOid = maxOid + 1;
+  }
+  iterateOid(): number {
+    return this._nextOid++;
   }
   async initialize(transaction: Transaction): Promise<void> {
     const headerPage = await this._bufferPoolManager.newPage(
@@ -56,11 +63,13 @@ export class Catalog implements ICatalog {
     this._bufferPoolManager.unpinPage(headerPage.pageId, true);
     const tableInformationSchemaTableHeap = await TableHeap.create(
       this._bufferPoolManager,
+      this._logManager,
       TABLE_INFORMATION_SCHEMA_OID,
       TABLE_INFORMATION_SCHEMA_SCHEMA
     );
     const columnInformationSchemaTableHeap = await TableHeap.create(
       this._bufferPoolManager,
+      this._logManager,
       COLUMN_INFORMATION_SCHEMA_OID,
       COLUMN_INFORMATION_SCHEMA_SCHEMA
     );
@@ -88,9 +97,10 @@ export class Catalog implements ICatalog {
     schema: Schema,
     transaction: Transaction
   ): Promise<void> {
-    const oid = await this.nextOid();
+    const oid = this.iterateOid();
     const tableHeap = await TableHeap.create(
       this._bufferPoolManager,
+      this._logManager,
       oid,
       schema
     );
@@ -166,6 +176,7 @@ export class Catalog implements ICatalog {
     const schema = await this.getSchemaByOid(tableOid);
     return TableHeap.new(
       this._bufferPoolManager,
+      this._logManager,
       tableOid,
       firstPageId,
       schema
@@ -242,6 +253,7 @@ export class Catalog implements ICatalog {
     );
     return TableHeap.new(
       this._bufferPoolManager,
+      this._logManager,
       TABLE_INFORMATION_SCHEMA_OID,
       firstPageId,
       TABLE_INFORMATION_SCHEMA_SCHEMA
@@ -253,6 +265,7 @@ export class Catalog implements ICatalog {
     );
     return TableHeap.new(
       this._bufferPoolManager,
+      this._logManager,
       COLUMN_INFORMATION_SCHEMA_OID,
       firstPageId,
       COLUMN_INFORMATION_SCHEMA_SCHEMA

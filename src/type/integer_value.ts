@@ -61,4 +61,7 @@ export class IntegerValue extends InlinedValue {
   performGreaterThanEqual(right: IntegerValue): BooleanValue {
     return new BooleanValue(this._value >= right.value);
   }
+  toJSON() {
+    return this._value;
+  }
 }

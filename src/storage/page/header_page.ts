@@ -1,4 +1,10 @@
-import { INVALID_PAGE_ID, PAGE_SIZE, Page, PageGenerator } from "./page";
+import {
+  INVALID_PAGE_ID,
+  PAGE_SIZE,
+  Page,
+  PageDeserializer,
+  PageGenerator,
+} from "./page";
 
 const HEADER_PAGE_ID_SIZE = 4;
 const HEADER_NEXT_PAGE_ID_SIZE = 4;
@@ -70,8 +76,8 @@ export class HeaderPage extends Page {
   }
 }
 
-export class HeaderPageDeserializer {
-  deserialize(buffer: ArrayBuffer): HeaderPage {
+export class HeaderPageDeserializer implements PageDeserializer {
+  async deserialize(buffer: ArrayBuffer): Promise<HeaderPage> {
     const dataView = new DataView(buffer);
     const pageId = dataView.getInt32(0);
     const nextPageId = dataView.getInt32(HEADER_PAGE_ID_SIZE);

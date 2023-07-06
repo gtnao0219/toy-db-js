@@ -15,8 +15,10 @@ import { TRANSACTION_ID_HEADER_NAME } from "../common/common";
     req.on("end", async () => {
       try {
         body = body.trim();
-        if (body === "exit" || body === "quit") {
-          await instance.shutdown();
+        if (body === "exit" || body === "quit" || body === "break") {
+          if (body !== "break") {
+            await instance.shutdown();
+          }
           res.end(
             JSON.stringify({
               result: "Shutting down...",
@@ -26,7 +28,7 @@ import { TRANSACTION_ID_HEADER_NAME } from "../common/common";
           exit(0);
         }
         if (body === "debug") {
-          console.log(JSON.stringify(instance.debug(), null, 2));
+          console.log(JSON.stringify(instance, null, 2));
           res.end(
             JSON.stringify({
               result: "Debugging...",
@@ -73,6 +75,7 @@ import { TRANSACTION_ID_HEADER_NAME } from "../common/common";
           })
         );
       } catch (e: any) {
+        console.log(e.stack);
         res.end(
           JSON.stringify({
             transactionId: null,
