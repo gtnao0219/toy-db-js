@@ -10,7 +10,14 @@ export class BooleanValue extends InlinedValue {
   static deserialize(buffer: ArrayBuffer, offset: number): BooleanValue {
     const dataView = new DataView(buffer);
     const value = dataView.getUint8(offset);
-    return new BooleanValue(value === 1);
+    switch (value) {
+      case 0x00:
+        return new BooleanValue(false);
+      case 0x01:
+        return new BooleanValue(true);
+      default:
+        throw new Error(`Invalid boolean value: ${value}`);
+    }
   }
   get value(): boolean {
     return this._value;
