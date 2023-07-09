@@ -1,5 +1,4 @@
 import { RID } from "../common/RID";
-import { Debuggable } from "../common/common";
 import { TableHeap } from "../storage/table/table_heap";
 import { Tuple } from "../storage/table/tuple";
 import { LockMode } from "./lock_manager";

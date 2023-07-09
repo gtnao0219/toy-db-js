@@ -3,14 +3,14 @@ import { RID } from "../common/RID";
 const HEADER_SIZE = 20;
 
 export enum LogRecordType {
+  INSERT,
+  MARK_DELETE,
+  APPLY_DELETE,
+  ROLLBACK_DELETE,
+  UPDATE,
   BEGIN,
   COMMIT,
   ABORT,
-  INSERT,
-  UPDATE,
-  MARK_DELETE,
-  ROLLBACK_DELETE,
-  APPLY_DELETE,
 }
 
 export abstract class LogRecord {
@@ -26,8 +26,14 @@ export abstract class LogRecord {
   set lsn(lsn: number) {
     this._lsn = lsn;
   }
+  get prevLsn(): number {
+    return this._prevLsn;
+  }
   get transactionId(): number {
     return this._transactionId;
+  }
+  get type(): LogRecordType {
+    return this._type;
   }
   serialize(): ArrayBuffer {
     const buffer = new ArrayBuffer(HEADER_SIZE);
