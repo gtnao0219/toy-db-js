@@ -283,4 +283,16 @@ export class TableHeap {
     page.lsn = lsn;
     this._bufferPoolManager.unpinPage(page.pageId, true);
   }
+  async getTuple(rid: RID): Promise<Tuple | null> {
+    const page = await this._bufferPoolManager.fetchPage(
+      rid.pageId,
+      new TablePageDeserializer(this._schema)
+    );
+    if (!(page instanceof TablePage)) {
+      throw new Error("invalid page type");
+    }
+    const tuple = page.getTuple(rid);
+    this._bufferPoolManager.unpinPage(page.pageId, false);
+    return tuple;
+  }
 }

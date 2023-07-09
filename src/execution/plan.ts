@@ -4,6 +4,7 @@ import { ExpressionPlanNode, PathExpressionPlanNode } from "./expression_plan";
 
 export type PlanNode =
   | SeqScanPlanNode
+  | IndexScanPlanNode
   | NestedLoopJoinPlanNode
   | FilterPlanNode
   | AggregatePlanNode
@@ -15,6 +16,13 @@ export type PlanNode =
   | DeletePlanNode;
 export type SeqScanPlanNode = {
   type: "seq_scan";
+  tableOid: number;
+  outputSchema: Schema;
+};
+export type IndexScanPlanNode = {
+  type: "index_scan";
+  indexOid: number;
+  condition: ExpressionPlanNode;
   tableOid: number;
   outputSchema: Schema;
 };
@@ -90,3 +98,43 @@ export type DeletePlanNode = {
   outputSchema: Schema;
   child: PlanNode;
 };
+
+export function getChildren(plan: PlanNode): PlanNode[] {
+  switch (plan.type) {
+    case "seq_scan":
+    case "index_scan":
+    case "insert":
+      return [];
+    case "nested_loop_join":
+      return [plan.left, plan.right];
+    case "filter":
+    case "aggregate":
+    case "project":
+    case "sort":
+    case "limit":
+    case "update":
+    case "delete":
+      return [plan.child];
+  }
+}
+export function cloneFromChildren(
+  plan: PlanNode,
+  children: PlanNode[]
+): PlanNode {
+  switch (plan.type) {
+    case "seq_scan":
+    case "index_scan":
+    case "insert":
+      return { ...plan };
+    case "nested_loop_join":
+      return { ...plan, left: children[0], right: children[1] };
+    case "filter":
+    case "aggregate":
+    case "project":
+    case "sort":
+    case "limit":
+    case "update":
+    case "delete":
+      return { ...plan, child: children[0] };
+  }
+}

@@ -6,7 +6,9 @@ const DEFAULT_DATA_FILE_NAME = "data";
 const DEFAULT_LOG_FILE_NAME = "log";
 
 export interface DiskManager {
+  reset(): Promise<void>;
   existsDataFile(): boolean;
+  existsLogFile(): boolean;
   createDataFile(): Promise<boolean>;
   createLogFile(): Promise<boolean>;
   readPage(pageId: number): Promise<ArrayBuffer>;
@@ -24,8 +26,21 @@ export class DiskManagerImpl implements DiskManager {
   ) {
     this._mutex = new Mutex();
   }
+  async reset(): Promise<void> {
+    if (this.existsDataFile()) {
+      await fsp.unlink(this._data_file_name);
+    }
+    if (this.existsLogFile()) {
+      await fsp.unlink(this._log_file_name);
+    }
+    await this.createDataFile();
+    await this.createLogFile();
+  }
   existsDataFile(): boolean {
     return existsSync(this._data_file_name);
+  }
+  existsLogFile(): boolean {
+    return existsSync(this._log_file_name);
   }
   async createDataFile(): Promise<boolean> {
     const exists = this.existsDataFile();

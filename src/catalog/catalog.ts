@@ -19,8 +19,10 @@ import { Schema } from "./schema";
 const HEADER_PAGE_ID = 0;
 const TABLE_INFORMATION_SCHEMA_OID = 0;
 const COLUMN_INFORMATION_SCHEMA_OID = 1;
+const INDEX_INFORMATION_SCHEMA_OID = 2;
 const TABLE_INFORMATION_SCHEMA_NAME = "table_information_schema";
 const COLUMN_INFORMATION_SCHEMA_NAME = "column_information_schema";
+const INDEX_INFORMATION_SCHEMA_NAME = "index_information_schema";
 const TABLE_INFORMATION_SCHEMA_SCHEMA = new Schema([
   new Column("oid", Type.INTEGER),
   new Column("name", Type.VARCHAR),
@@ -31,6 +33,20 @@ const COLUMN_INFORMATION_SCHEMA_SCHEMA = new Schema([
   new Column("type", Type.INTEGER),
   new Column("ordinary_position", Type.INTEGER),
 ]);
+const INDEX_INFORMATION_SCHEMA_SCHEMA = new Schema([
+  new Column("oid", Type.INTEGER),
+  new Column("name", Type.VARCHAR),
+  new Column("table_oid", Type.INTEGER),
+  new Column("column_name", Type.VARCHAR),
+]);
+
+export type IndexInfo = {
+  oid: number;
+  name: string;
+  tableOid: number;
+  columnName: string;
+  // index: Index
+};
 
 export interface ICatalog {
   getOidByTableName(tableName: string): Promise<number>;
@@ -73,6 +89,12 @@ export class Catalog implements ICatalog {
       COLUMN_INFORMATION_SCHEMA_OID,
       COLUMN_INFORMATION_SCHEMA_SCHEMA
     );
+    const indexInformationSchemaTableHeap = await TableHeap.create(
+      this._bufferPoolManager,
+      this._logManager,
+      INDEX_INFORMATION_SCHEMA_OID,
+      INDEX_INFORMATION_SCHEMA_SCHEMA
+    );
     await this.insertHeaderPageEntry(
       TABLE_INFORMATION_SCHEMA_OID,
       tableInformationSchemaTableHeap.firstPageId
@@ -80,6 +102,10 @@ export class Catalog implements ICatalog {
     await this.insertHeaderPageEntry(
       COLUMN_INFORMATION_SCHEMA_OID,
       columnInformationSchemaTableHeap.firstPageId
+    );
+    await this.insertHeaderPageEntry(
+      INDEX_INFORMATION_SCHEMA_OID,
+      indexInformationSchemaTableHeap.firstPageId
     );
     await this.createTable(
       TABLE_INFORMATION_SCHEMA_NAME,
@@ -89,6 +115,11 @@ export class Catalog implements ICatalog {
     await this.createTable(
       COLUMN_INFORMATION_SCHEMA_NAME,
       COLUMN_INFORMATION_SCHEMA_SCHEMA,
+      transaction
+    );
+    await this.createTable(
+      INDEX_INFORMATION_SCHEMA_NAME,
+      INDEX_INFORMATION_SCHEMA_SCHEMA,
       transaction
     );
   }
@@ -126,6 +157,31 @@ export class Catalog implements ICatalog {
         transaction
       );
     }
+  }
+  async createIndex(
+    indexName: string,
+    tableName: string,
+    columnName: string,
+    transaction: Transaction
+  ): Promise<void> {
+    const tableOid = await this.getOidByTableName(tableName);
+    const schema = await this.getSchemaByOid(tableOid);
+    const column = schema.columns.find((c) => c.name === columnName);
+    if (column == null) {
+      throw new Error(`column ${columnName} not found`);
+    }
+    const oid = this.iterateOid();
+    const indexInfoHeap = await this.indexInformationSchemaTableHeap();
+    await indexInfoHeap.insertTuple(
+      new Tuple(INDEX_INFORMATION_SCHEMA_SCHEMA, [
+        new IntegerValue(oid),
+        new VarcharValue(indexName),
+        new IntegerValue(tableOid),
+        new VarcharValue(columnName),
+      ]),
+      transaction
+    );
+    // TODO: rows have been already inserted into the table, so we need to build the index
   }
   async getFirstPageIdByOid(oid: number): Promise<number> {
     const entries = await this.headerPageEntries();
@@ -185,6 +241,22 @@ export class Catalog implements ICatalog {
   async getTableHeapByTableName(tableName: string): Promise<TableHeap> {
     const oid = await this.getOidByTableName(tableName);
     return this.getTableHeapByOid(oid);
+  }
+  async getIndexesByOid(tableOid: number): Promise<IndexInfo[]> {
+    const heap = await this.indexInformationSchemaTableHeap();
+    const tuples = await heap.scan();
+    return tuples
+      .filter((tuple) => {
+        return tuple.tuple.values[2].value === tableOid;
+      })
+      .map((tuple) => {
+        return {
+          oid: tuple.tuple.values[0].value,
+          name: tuple.tuple.values[1].value,
+          tableOid: tuple.tuple.values[2].value,
+          columnName: tuple.tuple.values[3].value,
+        };
+      });
   }
   async headerPageEntries(): Promise<HeaderPageEntry[]> {
     const entries: HeaderPageEntry[] = [];
@@ -269,6 +341,18 @@ export class Catalog implements ICatalog {
       COLUMN_INFORMATION_SCHEMA_OID,
       firstPageId,
       COLUMN_INFORMATION_SCHEMA_SCHEMA
+    );
+  }
+  async indexInformationSchemaTableHeap(): Promise<TableHeap> {
+    const firstPageId = await this.getFirstPageIdByOid(
+      INDEX_INFORMATION_SCHEMA_OID
+    );
+    return TableHeap.new(
+      this._bufferPoolManager,
+      this._logManager,
+      INDEX_INFORMATION_SCHEMA_OID,
+      firstPageId,
+      INDEX_INFORMATION_SCHEMA_SCHEMA
     );
   }
 }

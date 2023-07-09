@@ -10,44 +10,33 @@ import { ExecutorEngine } from "../execution/executor_engine";
 import { PlanNode } from "../execution/plan";
 import { plan } from "../execution/planner";
 import { Parser } from "../parser/parser";
-import { nextTransactionIdAndLsn } from "../recovery/log_recovery";
 import { LogManager } from "../recovery/log_manager";
 import { DiskManagerImpl } from "../storage/disk/disk_manager";
 import { Type } from "../type/type";
 
 (async () => {
   const diskManager = new DiskManagerImpl();
-  const mustInitialize = !diskManager.existsDataFile();
-  if (mustInitialize) {
-    await diskManager.createDataFile();
-    await diskManager.createLogFile();
-  }
+  await diskManager.reset();
+
   const bufferPoolManager = new BufferPoolManagerImpl(diskManager);
   const lockManager = new LockManager();
-  const [nextTransactionId, nextLsn] = await nextTransactionIdAndLsn(
-    diskManager
-  );
-  const logManager = new LogManager(diskManager, nextLsn);
-  const transactionManager = new TransactionManager(
-    lockManager,
-    logManager,
-    nextTransactionId
-  );
+  const logManager = new LogManager(diskManager);
+  const transactionManager = new TransactionManager(lockManager, logManager);
   const catalog = new Catalog(bufferPoolManager, logManager);
-  if (mustInitialize) {
-    const transaction = await transactionManager.begin();
-    await catalog.initialize(transaction);
-    await transactionManager.commit(transaction);
-  }
+
+  const transaction1 = await transactionManager.begin();
+  await catalog.initialize(transaction1);
+  await transactionManager.commit(transaction1);
   await catalog.setupNextOid();
+
   const executorEngine = new ExecutorEngine(
     bufferPoolManager,
     transactionManager,
     catalog
   );
-  const transaction = await transactionManager.begin();
+  const transaction2 = await transactionManager.begin();
   const executorContext = new ExecutorContext(
-    transaction,
+    transaction2,
     bufferPoolManager,
     lockManager,
     transactionManager,
@@ -63,8 +52,16 @@ import { Type } from "../type/type";
     new Column("name", Type.VARCHAR),
     new Column("archived", Type.BOOLEAN),
   ]);
-  await catalog.createTable("accounts", accountsSchema, transaction);
-  await catalog.createTable("users", usersSchema, transaction);
+  await catalog.createTable("accounts", accountsSchema, transaction2);
+  await catalog.createTable("users", usersSchema, transaction2);
+  await catalog.createIndex("accounts_id_idx", "accounts", "id", transaction2);
+  await catalog.createIndex("users_id_idx", "users", "id", transaction2);
+  await catalog.createIndex(
+    "users_accountId_idx",
+    "users",
+    "accountId",
+    transaction2
+  );
 
   const accounts = [
     [1, "A company"],
@@ -99,18 +96,16 @@ import { Type } from "../type/type";
   for (let i = 0; i < accounts.length; ++i) {
     const account = accounts[i];
     const sql = `INSERT INTO accounts VALUES (${account[0]}, '${account[1]}')`;
-    console.log(sql);
     const plan = await generatePlan(sql, catalog);
     await executorEngine.execute(executorContext, plan);
   }
   for (let i = 0; i < users.length; ++i) {
     const user = users[i];
     const sql = `INSERT INTO users VALUES (${user[0]}, ${user[1]}, '${user[2]}', ${user[3]})`;
-    console.log(sql);
     const plan = await generatePlan(sql, catalog);
     await executorEngine.execute(executorContext, plan);
   }
-  await transactionManager.commit(transaction);
+  await transactionManager.commit(transaction2);
   await bufferPoolManager.flushAllPages();
 })();
 

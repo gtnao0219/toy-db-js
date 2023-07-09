@@ -9,6 +9,7 @@ export enum ExecutorType {
   UPDATE,
   NESTED_LOOP_JOIN,
   SEQ_SCAN,
+  INDEX_SCAN,
   PROJECTION,
   AGGREGATE,
   FILTER,

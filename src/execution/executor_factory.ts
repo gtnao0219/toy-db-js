@@ -2,6 +2,7 @@ import { AggregateExecutor } from "./executor/aggregate_executor";
 import { DeleteExecutor } from "./executor/delete_executor";
 import { Executor } from "./executor/executor";
 import { FilterExecutor } from "./executor/filter_executor";
+import { IndexScanExecutor } from "./executor/index_scan_executor";
 import { InsertExecutor } from "./executor/insert_executor";
 import { LimitExecutor } from "./executor/limit_executor";
 import { NestedLoopJoinExecutor } from "./executor/nested_loop_join_executor";
@@ -33,6 +34,8 @@ export function createExecutor(
       );
     case "seq_scan":
       return new SeqScanExecutor(executorContext, plan);
+    case "index_scan":
+      return new IndexScanExecutor(executorContext, plan);
     case "nested_loop_join":
       return new NestedLoopJoinExecutor(
         executorContext,

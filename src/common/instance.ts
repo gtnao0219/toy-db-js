@@ -15,6 +15,7 @@ import { nextTransactionIdAndLsn, recover } from "../recovery/log_recovery";
 import { LogManager } from "../recovery/log_manager";
 import { DiskManager, DiskManagerImpl } from "../storage/disk/disk_manager";
 import { Tuple } from "../storage/table/tuple";
+import { optimize } from "../optimizer/optimizer";
 
 export type SQLResult = {
   transactionId: number | null;
@@ -120,9 +121,10 @@ export class Instance {
     }
 
     const planNode = plan(statement);
+    const optimizedPlan = await optimize(planNode, this._catalog);
     const tuples = await this._executorEngine.execute(
       executorContext,
-      planNode
+      optimizedPlan
     );
     if (transactionId == null) {
       await this._transactionManager.commit(transaction);
