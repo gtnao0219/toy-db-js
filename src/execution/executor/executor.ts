@@ -10,6 +10,7 @@ export enum ExecutorType {
   NESTED_LOOP_JOIN,
   SEQ_SCAN,
   PROJECTION,
+  AGGREGATE,
   FILTER,
   SORT,
   LIMIT,

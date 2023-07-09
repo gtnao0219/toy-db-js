@@ -6,6 +6,7 @@ export type PlanNode =
   | SeqScanPlanNode
   | NestedLoopJoinPlanNode
   | FilterPlanNode
+  | AggregatePlanNode
   | ProjectPlanNode
   | SortPlanNode
   | LimitPlanNode
@@ -31,6 +32,15 @@ export type FilterPlanNode = {
   outputSchema: Schema;
   child: PlanNode;
 };
+export type AggregatePlanNode = {
+  type: "aggregate";
+  groupBy: PathExpressionPlanNode[];
+  aggregations: ExpressionPlanNode[];
+  aggregationTypes: AggregationType[];
+  outputSchema: Schema;
+  child: PlanNode;
+};
+export type AggregationType = "count" | "sum" | "max" | "min";
 export type ProjectPlanNode = {
   type: "project";
   selectElements: SelectElementPlanNode[];

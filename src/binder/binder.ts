@@ -113,6 +113,11 @@ export class Binder {
     });
     const condition =
       ast.condition != null ? this.bindExpression(ast.condition) : null;
+    const groupBy =
+      ast.groupBy != null
+        ? ast.groupBy.map((item) => this.bindPathExpression(item))
+        : null;
+    const having = ast.having != null ? this.bindExpression(ast.having) : null;
     if (!ast.isAsterisk) {
       this.scope = {
         type: "select_elements",
@@ -142,6 +147,8 @@ export class Binder {
       selectElements,
       tableReference,
       ...(condition != null ? { condition } : {}),
+      ...(groupBy != null ? { groupBy } : {}),
+      ...(having != null ? { having } : {}),
       ...(orderBy != null ? { orderBy } : {}),
       ...(limit != null ? { limit } : {}),
     };

@@ -1,3 +1,4 @@
+import { AggregateExecutor } from "./executor/aggregate_executor";
 import { DeleteExecutor } from "./executor/delete_executor";
 import { Executor } from "./executor/executor";
 import { FilterExecutor } from "./executor/filter_executor";
@@ -41,6 +42,12 @@ export function createExecutor(
       );
     case "project":
       return new ProjectionExecutor(
+        executorContext,
+        plan,
+        createExecutor(executorContext, plan.child)
+      );
+    case "aggregate":
+      return new AggregateExecutor(
         executorContext,
         plan,
         createExecutor(executorContext, plan.child)

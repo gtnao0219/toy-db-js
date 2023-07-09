@@ -126,3 +126,20 @@ export type BoundLiteralExpression = {
   type: "literal";
   value: LiteralValue;
 };
+export function hasAggregation(boundExpression: BoundExpression): boolean {
+  switch (boundExpression.type) {
+    case "binary_operation":
+      return (
+        hasAggregation(boundExpression.left) ||
+        hasAggregation(boundExpression.right)
+      );
+    case "unary_operation":
+      return hasAggregation(boundExpression.operand);
+    case "function_call":
+      return true;
+    case "path":
+      return false;
+    case "literal":
+      return false;
+  }
+}

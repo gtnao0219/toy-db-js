@@ -6,6 +6,7 @@ import {
   BoundPathExpression,
   BoundUnaryOperationExpression,
 } from "../binder/bound";
+import { Column } from "../catalog/column";
 import { Schema } from "../catalog/schema";
 import { BinaryOperator, UnaryOperator } from "../parser/ast";
 import { LiteralValue } from "../parser/token";
@@ -15,7 +16,7 @@ import { IntegerValue } from "../type/integer_value";
 import { Type } from "../type/type";
 import { Value } from "../type/value";
 import { VarcharValue } from "../type/varchar_value";
-import { PlanNode } from "./plan";
+import { AggregationType, PlanNode } from "./plan";
 
 export type ExpressionPlanNode =
   | BinaryOperationExpressionPlanNode
@@ -54,15 +55,16 @@ export const UNNAMED = "unnamed";
 
 export function planExpression(
   expression: BoundExpression,
-  children: PlanNode[]
+  children: PlanNode[],
+  aggContext?: { count: number; exprInAgg: PathExpressionPlanNode[] }
 ): [string, ExpressionPlanNode] {
   switch (expression.type) {
     case "binary_operation":
-      return planBinaryOperationExpression(expression, children);
+      return planBinaryOperationExpression(expression, children, aggContext);
     case "unary_operation":
-      return planUnaryOperationExpression(expression, children);
+      return planUnaryOperationExpression(expression, children, aggContext);
     case "function_call":
-      return planFunctionCallExpression(expression, children);
+      return planFunctionCallExpression(expression, children, aggContext);
     case "literal":
       return planLiteralExpression(expression, children);
     case "path":
@@ -72,10 +74,11 @@ export function planExpression(
 
 export function planBinaryOperationExpression(
   expression: BoundBinaryOperationExpression,
-  children: PlanNode[]
+  children: PlanNode[],
+  aggContext?: { count: number; exprInAgg: PathExpressionPlanNode[] }
 ): [string, BinaryOperationExpressionPlanNode] {
-  const [_, left] = planExpression(expression.left, children);
-  const [__, right] = planExpression(expression.right, children);
+  const [_, left] = planExpression(expression.left, children, aggContext);
+  const [__, right] = planExpression(expression.right, children, aggContext);
   return [
     UNNAMED,
     {
@@ -88,9 +91,10 @@ export function planBinaryOperationExpression(
 }
 export function planUnaryOperationExpression(
   expression: BoundUnaryOperationExpression,
-  children: PlanNode[]
+  children: PlanNode[],
+  aggContext?: { count: number; exprInAgg: PathExpressionPlanNode[] }
 ): [string, UnaryOperationExpressionPlanNode] {
-  const [_, operand] = planExpression(expression.operand, children);
+  const [_, operand] = planExpression(expression.operand, children, aggContext);
   return [
     UNNAMED,
     {
@@ -102,17 +106,13 @@ export function planUnaryOperationExpression(
 }
 export function planFunctionCallExpression(
   expression: BoundFunctionCallExpression,
-  children: PlanNode[]
-): [string, FunctionCallExpressionPlanNode] {
-  const args = expression.args.map((arg) => planExpression(arg, children)[1]);
-  return [
-    UNNAMED,
-    {
-      type: "function_call",
-      functionName: expression.functionName,
-      args,
-    },
-  ];
+  children: PlanNode[],
+  aggContext?: { count: number; exprInAgg: PathExpressionPlanNode[] }
+): [string, PathExpressionPlanNode] {
+  if (aggContext == null) {
+    throw new Error("aggContext is null");
+  }
+  return [UNNAMED, aggContext.exprInAgg[aggContext.count++]];
 }
 export function planLiteralExpression(
   expression: BoundLiteralExpression,
@@ -138,7 +138,7 @@ export function planPathExpression(
       throw new Error("Not found");
     }
     return [
-      expression.path[expression.path.length - 1],
+      expression.path.join("."),
       {
         type: "path",
         tupleIndex: 0,
@@ -159,7 +159,7 @@ export function planPathExpression(
     }
     if (leftIndex !== -1) {
       return [
-        expression.path[expression.path.length - 1],
+        expression.path.join("."),
         {
           type: "path",
           tupleIndex: 0,
@@ -170,7 +170,7 @@ export function planPathExpression(
     }
     if (rightIndex !== -1) {
       return [
-        expression.path[expression.path.length - 1],
+        expression.path.join("."),
         {
           type: "path",
           tupleIndex: 1,
@@ -489,4 +489,20 @@ function inferLiteralType(expression: LiteralExpressionPlanNode): Type {
     return Type.BOOLEAN;
   }
   throw new Error("Not implemented4");
+}
+export function inferAggSchema(
+  groupByExpressions: PathExpressionPlanNode[],
+  inputExpressions: ExpressionPlanNode[],
+  aggregationTypes: AggregationType[]
+): Schema {
+  const columns: Column[] = [];
+  for (let i = 0; i < groupByExpressions.length; i++) {
+    columns.push(
+      new Column(`__group_by_${i}`, inferType(groupByExpressions[i]))
+    );
+  }
+  for (let i = 0; i < inputExpressions.length; i++) {
+    columns.push(new Column(`__agg_${i}`, Type.INTEGER));
+  }
+  return new Schema(columns);
 }

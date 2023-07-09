@@ -1,21 +1,27 @@
 import {
   BoundDeleteStatement,
+  BoundExpression,
+  BoundFunctionCallExpression,
   BoundInsertStatement,
   BoundSelectStatement,
   BoundStatement,
   BoundTableReference,
   BoundUpdateStatement,
+  hasAggregation,
 } from "../binder/bound";
 import { Column } from "../catalog/column";
 import { Schema } from "../catalog/schema";
 import { Type } from "../type/type";
+import { PathExpressionPlanNode, inferAggSchema } from "./expression_plan";
 import {
+  ExpressionPlanNode,
   UNNAMED,
   inferType,
   planExpression,
   planPathExpression,
 } from "./expression_plan";
 import {
+  AggregationType,
   DeletePlanNode,
   InsertPlanNode,
   PlanNode,
@@ -49,7 +55,21 @@ function planSelectStatement(statement: BoundSelectStatement): PlanNode {
       child,
     };
   }
-  child = planProject(statement, child);
+
+  // aggregation
+  const isAggregationRequired =
+    statement.groupBy != null ||
+    statement.having != null ||
+    statement.selectElements.some((selectElement) =>
+      hasAggregation(selectElement.expression)
+    );
+
+  if (isAggregationRequired) {
+    child = planAggregate(statement, child);
+  } else {
+    child = planProject(statement, child);
+  }
+
   if (statement.orderBy != null) {
     child = {
       type: "sort",
@@ -217,4 +237,166 @@ function planProject(
     ),
     child,
   };
+}
+
+function planAggregate(
+  selectStatement: BoundSelectStatement,
+  child: PlanNode
+): ProjectPlanNode {
+  const outputSchemaNames: string[] = [];
+  const groupByExpressions: PathExpressionPlanNode[] = [];
+  for (const groupByItem of selectStatement.groupBy ?? []) {
+    const [name, expression] = planPathExpression(groupByItem, [child]);
+    outputSchemaNames.push(name);
+    groupByExpressions.push(expression);
+  }
+  // TODO: support context
+  const aggregationExpressions: BoundExpression[] = [];
+  if (selectStatement.having != null) {
+    addAggCallToContext(selectStatement.having).forEach((aggCall) => {
+      aggregationExpressions.push(aggCall);
+    });
+  }
+  selectStatement.selectElements.forEach((selectElement) => {
+    addAggCallToContext(selectElement.expression).forEach((aggCall) => {
+      aggregationExpressions.push(aggCall);
+    });
+  });
+  const inputExpressions: ExpressionPlanNode[] = [];
+  const aggregationTypes: AggregationType[] = [];
+  const aggBeginIndex = groupByExpressions.length;
+  // TODO: support context
+  const exprInAgg: PathExpressionPlanNode[] = [];
+  for (let i = 0; i < aggregationExpressions.length; i++) {
+    const aggregationExpression = aggregationExpressions[i];
+    if (aggregationExpression.type !== "function_call") {
+      throw new Error("aggregation expression must be function call");
+    }
+    const [aggregationType, inputExpression] = planAggCall(
+      aggregationExpression,
+      child
+    );
+    if (inputExpression.length === 0) {
+      inputExpressions.push({
+        type: "literal",
+        value: 1,
+      });
+    } else if (inputExpression.length === 1) {
+      inputExpressions.push(inputExpression[0]);
+    } else {
+      throw new Error("invalid aggregation expression size");
+    }
+    aggregationTypes.push(aggregationType);
+    outputSchemaNames.push(`__agg${i}`);
+    exprInAgg.push({
+      type: "path",
+      tupleIndex: 0,
+      columnIndex: aggBeginIndex + i,
+      dataType: Type.INTEGER,
+    });
+  }
+  const outputSchema = inferAggSchema(
+    groupByExpressions,
+    inputExpressions,
+    aggregationTypes
+  );
+  let plan: PlanNode = {
+    type: "aggregate",
+    groupBy: groupByExpressions,
+    aggregations: inputExpressions,
+    aggregationTypes,
+    outputSchema: new Schema(
+      outputSchema.columns.map((column, index) => {
+        return new Column(outputSchemaNames[index], column.type);
+      })
+    ),
+    child,
+  };
+  const aggContext = {
+    exprInAgg,
+    count: 0,
+  };
+  if (selectStatement.having != null) {
+    const [_, condition] = planExpression(
+      selectStatement.having,
+      [plan],
+      aggContext
+    );
+    plan = {
+      type: "filter",
+      condition,
+      outputSchema: plan.outputSchema,
+      child: plan,
+    };
+  }
+  const names: string[] = [];
+  const selectElementsPlanNode = selectStatement.selectElements.map(
+    (selectElement) => {
+      const [name, expression] = planExpression(
+        selectElement.expression,
+        [plan],
+        aggContext
+      );
+      names.push(name);
+      return {
+        expression: expression,
+        alias: selectElement.alias,
+      };
+    }
+  );
+  let unnamedCount = 0;
+  return {
+    type: "project",
+    selectElements: selectElementsPlanNode,
+    outputSchema: new Schema(
+      selectElementsPlanNode.map((selectElementPlanNode, index) => {
+        return new Column(
+          selectElementPlanNode.alias ??
+            (names[index] === UNNAMED
+              ? `__col${unnamedCount++}`
+              : names[index]),
+          inferType(selectElementPlanNode.expression)
+        );
+      })
+    ),
+    child: plan,
+  };
+}
+function addAggCallToContext(expression: BoundExpression): BoundExpression[] {
+  switch (expression.type) {
+    case "binary_operation":
+      return [
+        ...addAggCallToContext(expression.left),
+        ...addAggCallToContext(expression.right),
+      ];
+    case "unary_operation":
+      return addAggCallToContext(expression.operand);
+    case "function_call":
+      return [expression];
+    case "path":
+      return [];
+    case "literal":
+      return [];
+  }
+}
+function planAggCall(
+  aggCall: BoundFunctionCallExpression,
+  child: PlanNode
+): [AggregationType, ExpressionPlanNode[]] {
+  const exprs = aggCall.args.map((arg) => {
+    const [_, expr] = planExpression(arg, [child]);
+    return expr;
+  });
+  switch (aggCall.functionName.toLowerCase()) {
+    case "count":
+      return ["count", exprs];
+    case "sum":
+      return ["sum", exprs];
+    case "min":
+      return ["min", exprs];
+    case "max":
+      return ["max", exprs];
+    default:
+      throw new Error(`unknown function ${aggCall.functionName}`);
+  }
 }
