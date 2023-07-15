@@ -2,14 +2,43 @@ import { DiskManager } from "../storage/disk/disk_manager";
 import { LogRecord } from "./log_record";
 import Mutex from "../../node_modules/async-mutex/lib/Mutex";
 
-export class LogManager {
+export interface LogManager {
+  bootstrap(): Promise<void>;
+  read(): Promise<LogRecord[]>;
+  append(record: LogRecord): Promise<number>;
+  flush(): Promise<void>;
+}
+
+export class LogManagerImpl implements LogManager {
   private _mutex: Mutex;
   private _logRecords: LogRecord[] = [];
-  constructor(private _diskManager: DiskManager, private _nextLsn: number = 0) {
+  private _nextLsn: number = 0;
+  constructor(private _diskManager: DiskManager) {
     this._mutex = new Mutex();
   }
-  set nextLsn(nextLsn: number) {
-    this._nextLsn = nextLsn;
+  async bootstrap(): Promise<void> {
+    const logRecords = await this.read();
+    if (logRecords.length === 0) {
+      return;
+    }
+    this._nextLsn = logRecords[logRecords.length - 1].lsn + 1;
+  }
+  async read(): Promise<LogRecord[]> {
+    const log = await this._diskManager.readLog();
+    const logView = new DataView(log);
+    const logLength = log.byteLength;
+    if (logLength === 0) {
+      return [];
+    }
+    let offset = 0;
+    const logRecords: LogRecord[] = [];
+    while (offset < logLength) {
+      const size = logView.getInt32(offset);
+      const logRecord = LogRecord.deserialize(log.slice(offset, offset + size));
+      logRecords.push(logRecord);
+      offset += size;
+    }
+    return logRecords;
   }
   async flush() {
     await this._mutex.runExclusive(async () => {
@@ -33,7 +62,7 @@ export class LogManager {
       this._logRecords = [];
     });
   }
-  async appendLogRecord(logRecord: LogRecord): Promise<number> {
+  async append(logRecord: LogRecord): Promise<number> {
     await this._mutex.runExclusive(async () => {
       logRecord.lsn = this._nextLsn++;
       this._logRecords.push(logRecord);

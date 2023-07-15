@@ -7,44 +7,48 @@ import {
 } from "../../../src/storage/page/page";
 
 describe("DiskManagerImpl", () => {
-  describe("existsDataFile", () => {
-    it("returns false if data file does not exist", () => {
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/does_not_exist"
-      );
-      expect(diskManager.existsDataFile()).toBe(false);
-    });
-    it("returns true if data file exists", () => {
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/empty_data"
-      );
-      expect(diskManager.existsDataFile()).toBe(true);
-    });
+  describe("bootstrap", () => {
+    it("data file and log file are created", async () => {});
   });
-  describe("createDataFile", () => {
-    it("creates empty data file", async () => {
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/does_not_exist"
-      );
-      const created = await diskManager.createDataFile();
-      expect(created).toBe(true);
-      const stats = await fsp.stat("test/data/disk_manager/does_not_exist");
-      expect(stats.size).toBe(0);
-      // Cleanup
-      await fsp.unlink("test/data/disk_manager/does_not_exist");
-    });
-    it("does not create data file if it already exists", async () => {
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_read_data"
-      );
-      const created = await diskManager.createDataFile();
-      expect(created).toBe(false);
-      const stats = await fsp.stat(
-        "test/data/disk_manager/test_page_read_data"
-      );
-      expect(stats.size).toBe(PAGE_SIZE * 2);
-    });
-  });
+  describe("reset", () => {});
+  // describe("existsDataFile", () => {
+  //   it("returns false if data file does not exist", () => {
+  //     const diskManager = new DiskManagerImpl(
+  //       "test/data/disk_manager/does_not_exist"
+  //     );
+  //     expect(diskManager.existsDataFile()).toBe(false);
+  //   });
+  //   it("returns true if data file exists", () => {
+  //     const diskManager = new DiskManagerImpl(
+  //       "test/data/disk_manager/empty_data"
+  //     );
+  //     expect(diskManager.existsDataFile()).toBe(true);
+  //   });
+  // });
+  // describe("createDataFile", () => {
+  //   it("creates empty data file", async () => {
+  //     const diskManager = new DiskManagerImpl(
+  //       "test/data/disk_manager/does_not_exist"
+  //     );
+  //     const created = await diskManager.createDataFile();
+  //     expect(created).toBe(true);
+  //     const stats = await fsp.stat("test/data/disk_manager/does_not_exist");
+  //     expect(stats.size).toBe(0);
+  //     // Cleanup
+  //     await fsp.unlink("test/data/disk_manager/does_not_exist");
+  //   });
+  //   it("does not create data file if it already exists", async () => {
+  //     const diskManager = new DiskManagerImpl(
+  //       "test/data/disk_manager/test_page_read_data"
+  //     );
+  //     const created = await diskManager.createDataFile();
+  //     expect(created).toBe(false);
+  //     const stats = await fsp.stat(
+  //       "test/data/disk_manager/test_page_read_data"
+  //     );
+  //     expect(stats.size).toBe(PAGE_SIZE * 2);
+  //   });
+  // });
   describe("readPage", () => {
     it("reads page from data file", async () => {
       const diskManager = new DiskManagerImpl(
@@ -197,7 +201,7 @@ async function prepareTestPageReadData() {
   const diskManager = new DiskManagerImpl(
     "test/data/disk_manager/test_page_read_data"
   );
-  diskManager.createDataFile();
+  diskManager.reset();
   const firstPageBuffer = new ArrayBuffer(PAGE_SIZE);
   const firstPageView = new Uint8Array(firstPageBuffer);
   for (let i = 0; i < firstPageView.length; i++) {

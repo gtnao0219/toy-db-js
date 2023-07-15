@@ -1,5 +1,6 @@
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Transaction } from "../concurrency/transaction";
+import { TransactionManager } from "../concurrency/transaction_manager";
 import { LogManager } from "../recovery/log_manager";
 import {
   HeaderPage,
@@ -48,31 +49,34 @@ export type IndexInfo = {
   // index: Index
 };
 
-export interface ICatalog {
+export interface Catalog {
+  bootstrap(isEmpty: boolean): Promise<void>;
+  createTable(
+    tableName: string,
+    schema: Schema,
+    transaction: Transaction
+  ): Promise<void>;
   getOidByTableName(tableName: string): Promise<number>;
   getSchemaByOid(oid: number): Promise<Schema>;
+  getTableHeapByOid(oid: number): Promise<TableHeap>;
+  getIndexesByOid(oid: number): Promise<IndexInfo[]>;
 }
 
-export class Catalog implements ICatalog {
+export class CatalogImpl implements Catalog {
   private _nextOid: number = 0;
   constructor(
     private _bufferPoolManager: BufferPoolManager,
-    private _logManager: LogManager
+    private _logManager: LogManager,
+    private _transactionManager: TransactionManager
   ) {}
-  async setupNextOid(): Promise<void> {
-    const entries = await this.headerPageEntries();
-    let maxOid = -1;
-    for (const entry of entries) {
-      if (entry.oid > maxOid) {
-        maxOid = entry.oid;
-      }
+  async bootstrap(isEmpty: boolean): Promise<void> {
+    if (isEmpty) {
+      await this.createSystemPages();
+    } else {
+      await this.setupNextOid();
     }
-    this._nextOid = maxOid + 1;
   }
-  iterateOid(): number {
-    return this._nextOid++;
-  }
-  async initialize(transaction: Transaction): Promise<void> {
+  async createSystemPages(): Promise<void> {
     const headerPage = await this._bufferPoolManager.newPage(
       new HeaderPageGenerator()
     );
@@ -107,35 +111,55 @@ export class Catalog implements ICatalog {
       INDEX_INFORMATION_SCHEMA_OID,
       indexInformationSchemaTableHeap.firstPageId
     );
+    await this.setupNextOid();
+
+    const transaction = await this._transactionManager.begin();
     await this.createTable(
       TABLE_INFORMATION_SCHEMA_NAME,
       TABLE_INFORMATION_SCHEMA_SCHEMA,
-      transaction
+      transaction,
+      TABLE_INFORMATION_SCHEMA_OID
     );
     await this.createTable(
       COLUMN_INFORMATION_SCHEMA_NAME,
       COLUMN_INFORMATION_SCHEMA_SCHEMA,
-      transaction
+      transaction,
+      COLUMN_INFORMATION_SCHEMA_OID
     );
     await this.createTable(
       INDEX_INFORMATION_SCHEMA_NAME,
       INDEX_INFORMATION_SCHEMA_SCHEMA,
-      transaction
+      transaction,
+      INDEX_INFORMATION_SCHEMA_OID
     );
+    await this._transactionManager.commit(transaction);
+  }
+  private async setupNextOid(): Promise<void> {
+    const entries = await this.headerPageEntries();
+    let maxOid = -1;
+    for (const entry of entries) {
+      if (entry.oid > maxOid) {
+        maxOid = entry.oid;
+      }
+    }
+    this._nextOid = maxOid + 1;
   }
   async createTable(
     tableName: string,
     schema: Schema,
-    transaction: Transaction
+    transaction: Transaction,
+    systemOid: number | null = null
   ): Promise<void> {
-    const oid = this.iterateOid();
+    const oid = systemOid == null ? this.iterateOid() : systemOid;
     const tableHeap = await TableHeap.create(
       this._bufferPoolManager,
       this._logManager,
       oid,
       schema
     );
-    await this.insertHeaderPageEntry(oid, tableHeap.firstPageId);
+    if (systemOid == null) {
+      await this.insertHeaderPageEntry(oid, tableHeap.firstPageId);
+    }
     const tableInfoHeap = await this.tableInformationSchemaTableHeap();
     await tableInfoHeap.insertTuple(
       new Tuple(TABLE_INFORMATION_SCHEMA_SCHEMA, [
@@ -183,7 +207,10 @@ export class Catalog implements ICatalog {
     );
     // TODO: rows have been already inserted into the table, so we need to build the index
   }
-  async getFirstPageIdByOid(oid: number): Promise<number> {
+  private iterateOid(): number {
+    return this._nextOid++;
+  }
+  private async getFirstPageIdByOid(oid: number): Promise<number> {
     const entries = await this.headerPageEntries();
     for (const entry of entries) {
       if (entry.oid === oid) {
@@ -202,7 +229,7 @@ export class Catalog implements ICatalog {
     }
     throw new Error("Table not found");
   }
-  async getFirstPageIdByTableName(tableName: string): Promise<number> {
+  private async getFirstPageIdByTableName(tableName: string): Promise<number> {
     const oid = await this.getOidByTableName(tableName);
     return this.getFirstPageIdByOid(oid);
   }
@@ -223,7 +250,7 @@ export class Catalog implements ICatalog {
     });
     return new Schema(columns);
   }
-  async getSchemaByTableName(tableName: string): Promise<Schema> {
+  private async getSchemaByTableName(tableName: string): Promise<Schema> {
     const tableOid = await this.getOidByTableName(tableName);
     return this.getSchemaByOid(tableOid);
   }
@@ -238,7 +265,7 @@ export class Catalog implements ICatalog {
       schema
     );
   }
-  async getTableHeapByTableName(tableName: string): Promise<TableHeap> {
+  private async getTableHeapByTableName(tableName: string): Promise<TableHeap> {
     const oid = await this.getOidByTableName(tableName);
     return this.getTableHeapByOid(oid);
   }
@@ -258,7 +285,7 @@ export class Catalog implements ICatalog {
         };
       });
   }
-  async headerPageEntries(): Promise<HeaderPageEntry[]> {
+  private async headerPageEntries(): Promise<HeaderPageEntry[]> {
     const entries: HeaderPageEntry[] = [];
     let pageId = HEADER_PAGE_ID;
     while (true) {
@@ -278,7 +305,10 @@ export class Catalog implements ICatalog {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  async insertHeaderPageEntry(oid: number, firstPageId: number): Promise<void> {
+  private async insertHeaderPageEntry(
+    oid: number,
+    firstPageId: number
+  ): Promise<void> {
     let prevPageId = INVALID_PAGE_ID;
     let pageId = HEADER_PAGE_ID;
     while (true) {
@@ -319,7 +349,7 @@ export class Catalog implements ICatalog {
       this._bufferPoolManager.unpinPage(prevPageId, false);
     }
   }
-  async tableInformationSchemaTableHeap(): Promise<TableHeap> {
+  private async tableInformationSchemaTableHeap(): Promise<TableHeap> {
     const firstPageId = await this.getFirstPageIdByOid(
       TABLE_INFORMATION_SCHEMA_OID
     );
@@ -331,7 +361,7 @@ export class Catalog implements ICatalog {
       TABLE_INFORMATION_SCHEMA_SCHEMA
     );
   }
-  async columnInformationSchemaTableHeap(): Promise<TableHeap> {
+  private async columnInformationSchemaTableHeap(): Promise<TableHeap> {
     const firstPageId = await this.getFirstPageIdByOid(
       COLUMN_INFORMATION_SCHEMA_OID
     );
@@ -343,7 +373,7 @@ export class Catalog implements ICatalog {
       COLUMN_INFORMATION_SCHEMA_SCHEMA
     );
   }
-  async indexInformationSchemaTableHeap(): Promise<TableHeap> {
+  private async indexInformationSchemaTableHeap(): Promise<TableHeap> {
     const firstPageId = await this.getFirstPageIdByOid(
       INDEX_INFORMATION_SCHEMA_OID
     );

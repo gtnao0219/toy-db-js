@@ -1,68 +1,37 @@
 import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Catalog } from "../catalog/catalog";
-import { DiskManager } from "../storage/disk/disk_manager";
 import {
   TablePage,
   TablePageDeserializerUsingCatalog,
 } from "../storage/page/table_page";
 import { Tuple } from "../storage/table/tuple";
+import { LogManager } from "./log_manager";
 import {
   BeginLogRecord,
   CommitLogRecord,
   InsertLogRecord,
-  LogRecord,
   UpdateLogRecord,
   MarkDeleteLogRecord,
   RollbackDeleteLogRecord,
   ApplyDeleteLogRecord,
 } from "./log_record";
 
-async function readLog(diskManager: DiskManager): Promise<LogRecord[]> {
-  const log = await diskManager.readLog();
-  const logView = new DataView(log);
-  const logLength = log.byteLength;
-  if (logLength === 0) {
-    return [];
-  }
-  let offset = 0;
-  const logRecords: LogRecord[] = [];
-  while (offset < logLength) {
-    const size = logView.getInt32(offset);
-    const logRecord = LogRecord.deserialize(log.slice(offset, offset + size));
-    logRecords.push(logRecord);
-    offset += size;
-  }
-  return logRecords;
-}
-export async function nextTransactionIdAndLsn(
-  diskManager: DiskManager
-): Promise<[number, number]> {
-  const logs = await readLog(diskManager);
-  let nextTransactionId = 0;
-  let nextLsn = 0;
-  for (const log of logs) {
-    nextTransactionId = Math.max(nextTransactionId, log.transactionId + 1);
-    nextLsn = log.lsn + 1;
-  }
-  return [nextTransactionId, nextLsn];
-}
-
 export async function recover(
-  diskManager: DiskManager,
   bufferPoolManager: BufferPoolManager,
+  logManager: LogManager,
   catalog: Catalog
 ): Promise<void> {
-  const activeTx = await redo(diskManager, bufferPoolManager, catalog);
-  await undo(diskManager, bufferPoolManager, catalog, activeTx);
+  const activeTx = await redo(bufferPoolManager, logManager, catalog);
+  await undo(bufferPoolManager, logManager, catalog, activeTx);
   await bufferPoolManager.flushAllPages();
 }
 
 async function redo(
-  diskManager: DiskManager,
   bufferPoolManager: BufferPoolManager,
+  logManager: LogManager,
   catalog: Catalog
 ) {
-  const logs = await readLog(diskManager);
+  const logs = await logManager.read();
   console.log(JSON.stringify(logs, null, 2));
   const activeTx = new Set<number>();
   for (const log of logs) {
@@ -121,12 +90,12 @@ async function redo(
   return activeTx;
 }
 async function undo(
-  diskManager: DiskManager,
   bufferPoolManager: BufferPoolManager,
+  logManager: LogManager,
   catalog: Catalog,
   activeTx: Set<number>
 ) {
-  const logs = await readLog(diskManager);
+  const logs = await logManager.read();
   logs.reverse();
   for (const log of logs) {
     if (activeTx.has(log.transactionId)) {

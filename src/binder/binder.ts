@@ -1,4 +1,4 @@
-import { ICatalog } from "../catalog/catalog";
+import { Catalog } from "../catalog/catalog";
 import { Column } from "../catalog/column";
 import { Schema } from "../catalog/schema";
 import {
@@ -39,12 +39,13 @@ import {
   BoundFunctionCallExpression,
 } from "./bound";
 
+type Scope =
+  | BoundTableReference
+  | { type: "select_elements"; selectElements: BoundSelectElement[] };
+
 export class Binder {
-  private scope:
-    | BoundTableReference
-    | { type: "select_elements"; selectElements: BoundSelectElement[] }
-    | null = null;
-  constructor(private _catalog: ICatalog) {}
+  private scope: Scope | null = null;
+  constructor(private _catalog: Catalog) {}
   async bind(ast: StatementAST): Promise<BoundStatement> {
     switch (ast.type) {
       case "create_table_statement":
@@ -195,6 +196,7 @@ export class Binder {
       throw new Error("Unexpected table reference type");
     }
     if (ast.values.length !== tableReference.schema.columns.length) {
+      console.log(ast.values, tableReference.schema.columns);
       throw new Error("Number of values does not match number of columns");
     }
     const values = ast.values.map((value) => this.bindExpression(value));

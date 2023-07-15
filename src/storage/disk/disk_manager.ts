@@ -1,16 +1,14 @@
 import { promises as fsp, existsSync } from "fs";
-import { PAGE_SIZE } from "../page/page";
+import { PAGE_SIZE, PageId } from "../page/page";
 import Mutex from "../../../node_modules/async-mutex/lib/Mutex";
 
 const DEFAULT_DATA_FILE_NAME = "data";
 const DEFAULT_LOG_FILE_NAME = "log";
 
 export interface DiskManager {
+  bootstrap(): Promise<void>;
   reset(): Promise<void>;
-  existsDataFile(): boolean;
-  existsLogFile(): boolean;
-  createDataFile(): Promise<boolean>;
-  createLogFile(): Promise<boolean>;
+  isEmpty(): Promise<boolean>;
   readPage(pageId: number): Promise<ArrayBuffer>;
   writePage(pageId: number, buffer: ArrayBuffer): Promise<void>;
   readLog(): Promise<ArrayBuffer>;
@@ -26,6 +24,20 @@ export class DiskManagerImpl implements DiskManager {
   ) {
     this._mutex = new Mutex();
   }
+  async bootstrap(): Promise<void> {
+    if (this.mustInitialize()) {
+      await this.reset();
+    }
+  }
+  private mustInitialize(): boolean {
+    return !(this.existsDataFile() && this.existsLogFile());
+  }
+  private existsDataFile(): boolean {
+    return existsSync(this._data_file_name);
+  }
+  private existsLogFile(): boolean {
+    return existsSync(this._log_file_name);
+  }
   async reset(): Promise<void> {
     if (this.existsDataFile()) {
       await fsp.unlink(this._data_file_name);
@@ -36,33 +48,32 @@ export class DiskManagerImpl implements DiskManager {
     await this.createDataFile();
     await this.createLogFile();
   }
-  existsDataFile(): boolean {
-    return existsSync(this._data_file_name);
-  }
-  existsLogFile(): boolean {
-    return existsSync(this._log_file_name);
-  }
-  async createDataFile(): Promise<boolean> {
-    const exists = this.existsDataFile();
-    if (exists) {
-      return false;
+  private async createDataFile(): Promise<void> {
+    if (this.existsDataFile()) {
+      return;
     }
     const fd = await fsp.open(this._data_file_name, "w");
     await fd.write(new Uint8Array(new ArrayBuffer(0)), 0, 0);
     await fd.close();
-    return true;
+    return;
   }
-  async createLogFile(): Promise<boolean> {
+  private async createLogFile(): Promise<void> {
+    if (this.existsLogFile()) {
+      return;
+    }
     const fd = await fsp.open(this._log_file_name, "w");
     await fd.write(new Uint8Array(new ArrayBuffer(0)), 0, 0);
     await fd.close();
-    return true;
+    return;
   }
-  async readPage(pageId: number): Promise<ArrayBuffer> {
-    const buffer = new ArrayBuffer(PAGE_SIZE);
-    const view = new DataView(buffer);
+  async isEmpty(): Promise<boolean> {
+    const stats = await fsp.stat(this._data_file_name);
+    return stats.size === 0;
+  }
+  async readPage(pageId: PageId): Promise<ArrayBuffer> {
     const fd = await fsp.open(this._data_file_name, "r");
-    await fd.read(view, 0, PAGE_SIZE, pageId * PAGE_SIZE);
+    const buffer = new ArrayBuffer(PAGE_SIZE);
+    await fd.read(new DataView(buffer), 0, PAGE_SIZE, pageId * PAGE_SIZE);
     await fd.close();
     return buffer;
   }

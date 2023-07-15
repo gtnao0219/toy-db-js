@@ -1,67 +1,38 @@
-import { Binder } from "../binder/binder";
-import { BufferPoolManagerImpl } from "../buffer/buffer_pool_manager";
-import { Catalog } from "../catalog/catalog";
-import { Column } from "../catalog/column";
-import { Schema } from "../catalog/schema";
-import { LockManager } from "../concurrency/lock_manager";
-import { TransactionManager } from "../concurrency/transaction_manager";
-import { ExecutorContext } from "../execution/executor_context";
-import { ExecutorEngine } from "../execution/executor_engine";
-import { PlanNode } from "../execution/plan";
-import { plan } from "../execution/planner";
-import { Parser } from "../parser/parser";
-import { LogManager } from "../recovery/log_manager";
+import { Instance } from "../common/instance";
 import { DiskManagerImpl } from "../storage/disk/disk_manager";
-import { Type } from "../type/type";
 
 (async () => {
   const diskManager = new DiskManagerImpl();
   await diskManager.reset();
 
-  const bufferPoolManager = new BufferPoolManagerImpl(diskManager);
-  const lockManager = new LockManager();
-  const logManager = new LogManager(diskManager);
-  const transactionManager = new TransactionManager(lockManager, logManager);
-  const catalog = new Catalog(bufferPoolManager, logManager);
+  const instance = new Instance();
+  await instance.bootstrap();
 
-  const transaction1 = await transactionManager.begin();
-  await catalog.initialize(transaction1);
-  await transactionManager.commit(transaction1);
-  await catalog.setupNextOid();
-
-  const executorEngine = new ExecutorEngine(
-    bufferPoolManager,
-    transactionManager,
-    catalog
-  );
-  const transaction2 = await transactionManager.begin();
-  const executorContext = new ExecutorContext(
-    transaction2,
-    bufferPoolManager,
-    lockManager,
-    transactionManager,
-    catalog
-  );
-  const accountsSchema = new Schema([
-    new Column("id", Type.INTEGER),
-    new Column("name", Type.VARCHAR),
-  ]);
-  const usersSchema = new Schema([
-    new Column("id", Type.INTEGER),
-    new Column("accountId", Type.INTEGER),
-    new Column("name", Type.VARCHAR),
-    new Column("archived", Type.BOOLEAN),
-  ]);
-  await catalog.createTable("accounts", accountsSchema, transaction2);
-  await catalog.createTable("users", usersSchema, transaction2);
-  await catalog.createIndex("accounts_id_idx", "accounts", "id", transaction2);
-  await catalog.createIndex("users_id_idx", "users", "id", transaction2);
-  await catalog.createIndex(
-    "users_accountId_idx",
-    "users",
-    "accountId",
-    transaction2
-  );
+  const accountsTableCreateSQL = `
+    CREATE TABLE accounts(
+      id INTEGER,
+      name VARCHAR
+    );
+  `;
+  const usersTableCreateSQL = `
+    CREATE TABLE users(
+      id INTEGER,
+      accountId INTEGER,
+      name VARCHAR,
+      archived BOOLEAN
+    );
+  `;
+  const accountsIdIndexCreateSQL = `
+    CREATE INDEX accounts_id_idx;
+  `;
+  const usersIdIndexCreateSQL = `
+    CREATE INDEX users_id_idx;
+  `;
+  const usersAccountIdIndexCreateSQL = `
+    CREATE INDEX users_accountId_idx;
+  `;
+  await instance.executeSQL(accountsTableCreateSQL, null);
+  await instance.executeSQL(usersTableCreateSQL, null);
 
   const accounts = [
     [1, "A company"],
@@ -93,27 +64,17 @@ import { Type } from "../type/type";
     [15, 3, "Oliver", true],
     [16, 4, "Paul", false],
   ];
+  const { transactionId } = await instance.executeSQL("BEGIN;", null);
   for (let i = 0; i < accounts.length; ++i) {
     const account = accounts[i];
     const sql = `INSERT INTO accounts VALUES (${account[0]}, '${account[1]}')`;
-    const plan = await generatePlan(sql, catalog);
-    await executorEngine.execute(executorContext, plan);
+    await instance.executeSQL(sql, transactionId);
   }
   for (let i = 0; i < users.length; ++i) {
     const user = users[i];
     const sql = `INSERT INTO users VALUES (${user[0]}, ${user[1]}, '${user[2]}', ${user[3]})`;
-    const plan = await generatePlan(sql, catalog);
-    await executorEngine.execute(executorContext, plan);
+    await instance.executeSQL(sql, transactionId);
   }
-  await transactionManager.commit(transaction2);
-  await bufferPoolManager.flushAllPages();
+  await instance.executeSQL("COMMIT;", transactionId);
+  await instance.shutdown();
 })();
-
-async function generatePlan(sql: string, catalog: Catalog): Promise<PlanNode> {
-  const parser = new Parser(sql);
-  const ast = parser.parse();
-  const binder = new Binder(catalog);
-  const statement = await binder.bind(ast);
-  const planNode = plan(statement);
-  return planNode;
-}

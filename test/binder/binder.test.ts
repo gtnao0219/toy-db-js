@@ -1,16 +1,27 @@
 import { Binder } from "../../src/binder/binder";
-import { ICatalog } from "../../src/catalog/catalog";
+import { BufferPoolManagerImpl } from "../../src/buffer/buffer_pool_manager";
+import { Catalog, IndexInfo } from "../../src/catalog/catalog";
 import { Column } from "../../src/catalog/column";
 import { Schema } from "../../src/catalog/schema";
+import { Transaction } from "../../src/concurrency/transaction";
 import {
   DeleteStatementAST,
   InsertStatementAST,
   SelectStatementAST,
   UpdateStatementAST,
 } from "../../src/parser/ast";
+import { LogManagerImpl } from "../../src/recovery/log_manager";
+import { DiskManagerImpl } from "../../src/storage/disk/disk_manager";
+import { TableHeap } from "../../src/storage/table/table_heap";
 import { Type } from "../../src/type/type";
 
-class MockCatalog implements ICatalog {
+class MockCatalog implements Catalog {
+  async bootstrap(): Promise<void> {}
+  async createTable(
+    tableName: string,
+    schema: Schema,
+    transaction: Transaction
+  ): Promise<void> {}
   async getOidByTableName(tableName: string): Promise<number> {
     switch (tableName) {
       case "foo":
@@ -37,6 +48,19 @@ class MockCatalog implements ICatalog {
       default:
         throw new Error("Table not found");
     }
+  }
+  async getTableHeapByOid(oid: number): Promise<TableHeap> {
+    const diskManager = new DiskManagerImpl();
+    return new TableHeap(
+      new BufferPoolManagerImpl(diskManager),
+      new LogManagerImpl(diskManager),
+      1,
+      1,
+      new Schema([])
+    );
+  }
+  async getIndexesByOid(oid: number): Promise<IndexInfo[]> {
+    return [];
   }
 }
 describe("Binder", () => {

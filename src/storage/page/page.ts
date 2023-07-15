@@ -1,6 +1,8 @@
+export type PageId = number;
+
 export const PAGE_SIZE = 128;
 
-export const INVALID_PAGE_ID = -1;
+export const INVALID_PAGE_ID: PageId = -1;
 
 export enum PageType {
   TABLE_PAGE,
@@ -8,8 +10,8 @@ export enum PageType {
 }
 
 export abstract class Page {
-  constructor(protected _pageId: number = INVALID_PAGE_ID) {}
-  get pageId(): number {
+  constructor(protected _pageId: PageId = INVALID_PAGE_ID) {}
+  get pageId(): PageId {
     return this._pageId;
   }
   abstract serialize(): ArrayBuffer;

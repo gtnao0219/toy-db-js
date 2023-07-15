@@ -1,8 +1,7 @@
 import { RID } from "../common/RID";
-import { Debuggable } from "../common/common";
 import { IsolationLevel, Transaction, TransactionState } from "./transaction";
 
-export abstract class LockRequest implements Debuggable {
+export abstract class LockRequest {
   private _granted = false;
   constructor(
     protected _transaction: Transaction,
@@ -20,7 +19,6 @@ export abstract class LockRequest implements Debuggable {
   set granted(granted: boolean) {
     this._granted = granted;
   }
-  abstract debug(): object;
 }
 export class TableLockRequest extends LockRequest {
   constructor(
@@ -29,13 +27,6 @@ export class TableLockRequest extends LockRequest {
     private _tableOid: number
   ) {
     super(_transaction, _lockMode);
-  }
-  debug(): object {
-    return {
-      transactionId: this._transaction.transactionId,
-      lockMode: this._lockMode,
-      tableOid: this._tableOid,
-    };
   }
 }
 export class RowLockRequest extends LockRequest {
@@ -47,17 +38,9 @@ export class RowLockRequest extends LockRequest {
   ) {
     super(_transaction, _lockMode);
   }
-  debug(): object {
-    return {
-      transactionId: this._transaction.transactionId,
-      lockMode: this._lockMode,
-      tableOid: this._tableOid,
-      rid: this._rid,
-    };
-  }
 }
 
-export abstract class LockRequestQueue implements Debuggable {
+export abstract class LockRequestQueue {
   private _upgrading: boolean = false;
   protected _requests: Array<LockRequest> = [];
   get upgrading(): boolean {
@@ -68,12 +51,6 @@ export abstract class LockRequestQueue implements Debuggable {
   }
   get requests(): Array<LockRequest> {
     return this._requests;
-  }
-  debug(): object {
-    return {
-      upgrading: this._upgrading,
-      requests: this._requests.map((r) => r.debug()),
-    };
   }
 }
 export class TableLockRequestQueue extends LockRequestQueue {
@@ -97,7 +74,23 @@ export enum LockMode {
   SHARED_INTENTION_EXCLUSIVE,
 }
 
-export class LockManager implements Debuggable {
+export interface LockManager {
+  lockTable(
+    transaction: Transaction,
+    lockMode: LockMode,
+    tableOid: number
+  ): Promise<void>;
+  unlockTable(transaction: Transaction, tableOid: number): void;
+  lockRow(
+    transaction: Transaction,
+    lockMode: LockMode,
+    tableOid: number,
+    rid: RID
+  ): Promise<void>;
+  unlockRow(transaction: Transaction, tableOid: number, rid: RID): void;
+}
+
+export class LockManagerImpl implements LockManager {
   private _cv = new Int32Array(new SharedArrayBuffer(4));
   private tableLockMap = new Map<number, TableLockRequestQueue>();
   private rowLockMap = new Map<number, Map<number, RowLockRequestQueue>>();
@@ -319,33 +312,6 @@ export class LockManager implements Debuggable {
         request.transaction.removeRowLock(tableOid, rid, request.lockMode);
       }
     }
-  }
-  debug(): object {
-    return {
-      TableLockRequestQueue: Array.from(this.tableLockMap.entries()).map(
-        ([tableOid, queue]) => {
-          return {
-            tableOid,
-            queue: queue.debug(),
-          };
-        }
-      ),
-      RowLockRequestQueue: Array.from(this.rowLockMap.entries()).map(
-        ([pageId, slotIdMap]) => {
-          return {
-            pageId,
-            slotIdMap: Array.from(slotIdMap.entries()).map(
-              ([slotId, queue]) => {
-                return {
-                  slotId,
-                  queue: queue.debug(),
-                };
-              }
-            ),
-          };
-        }
-      ),
-    };
   }
   private findOrCreateTableLockRequestQueue(
     tableOid: number

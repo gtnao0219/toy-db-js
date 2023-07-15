@@ -8,7 +8,15 @@ import {
 import { LockManager } from "./lock_manager";
 import { Transaction, TransactionState, WriteType } from "./transaction";
 
-export class TransactionManager {
+export interface TransactionManager {
+  bootstrap(): Promise<void>;
+  getTransaction(transactionId: number): Transaction;
+  begin(): Promise<Transaction>;
+  commit(transaction: Transaction): Promise<void>;
+  abort(transaction: Transaction): Promise<void>;
+}
+
+export class TransactionManagerImpl implements TransactionManager {
   // TODO: read from storage
   private _transactionMap: Map<number, Transaction> = new Map();
   constructor(
@@ -19,18 +27,24 @@ export class TransactionManager {
   set nextTransactionId(nextTransactionId: number) {
     this._nextTransactionId = nextTransactionId;
   }
-  getTransaction(transactionId: number): Transaction | null {
+  getTransaction(transactionId: number): Transaction {
     const transaction = this._transactionMap.get(transactionId);
     if (transaction === undefined) {
-      return null;
+      throw new Error(`transaction ${transactionId} not found`);
     }
     return transaction;
+  }
+  async bootstrap() {
+    const logRecords = await this._logManager.read();
+    this._nextTransactionId = logRecords.reduce((acc, logRecord) => {
+      return Math.max(acc, logRecord.transactionId + 1);
+    }, 0);
   }
   async begin(): Promise<Transaction> {
     const transaction = new Transaction(this._nextTransactionId++);
     this._transactionMap.set(transaction.transactionId, transaction);
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new BeginLogRecord(-1, transaction.prevLsn, transaction.transactionId)
     );
     transaction.prevLsn = lsn;
@@ -48,7 +62,7 @@ export class TransactionManager {
       }
     });
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new CommitLogRecord(-1, transaction.prevLsn, transaction.transactionId)
     );
     transaction.prevLsn = lsn;
@@ -79,7 +93,7 @@ export class TransactionManager {
       }
     });
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new AbortLogRecord(-1, transaction.prevLsn, transaction.transactionId)
     );
     transaction.prevLsn = lsn;

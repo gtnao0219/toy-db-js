@@ -25,7 +25,7 @@ export type TupleWithRID = {
 };
 
 export class TableHeap {
-  private constructor(
+  constructor(
     private _bufferPoolManager: BufferPoolManager,
     private _logManager: LogManager,
     private _oid: number,
@@ -133,7 +133,7 @@ export class TableHeap {
         }
         transaction.addWriteRecord(WriteType.INSERT, rid, null, this);
 
-        const lsn = await this._logManager.appendLogRecord(
+        const lsn = await this._logManager.append(
           new InsertLogRecord(
             -1,
             transaction.prevLsn,
@@ -160,7 +160,7 @@ export class TableHeap {
       if (rid !== null) {
         transaction.addWriteRecord(WriteType.INSERT, rid, null, this);
 
-        const lsn = await this._logManager.appendLogRecord(
+        const lsn = await this._logManager.append(
           new InsertLogRecord(
             -1,
             transaction.prevLsn,
@@ -192,7 +192,7 @@ export class TableHeap {
     page.markDelete(rid, transaction);
     transaction.addWriteRecord(WriteType.DELETE, rid, oldTuple, this);
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new MarkDeleteLogRecord(
         -1,
         transaction.prevLsn,
@@ -216,7 +216,7 @@ export class TableHeap {
     const oldTuple = page.getTuple(rid);
     page.applyDelete(rid, transaction);
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new ApplyDeleteLogRecord(
         -1,
         transaction.prevLsn,
@@ -240,7 +240,7 @@ export class TableHeap {
     const oldTuple = page.getTuple(rid);
     page.rollbackDelete(rid, transaction);
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new RollbackDeleteLogRecord(
         -1,
         transaction.prevLsn,
@@ -269,7 +269,7 @@ export class TableHeap {
     page.updateTuple(rid, tuple, transaction);
     transaction.addWriteRecord(WriteType.UPDATE, rid, oldTuple, this);
 
-    const lsn = await this._logManager.appendLogRecord(
+    const lsn = await this._logManager.append(
       new UpdateLogRecord(
         -1,
         transaction.prevLsn,
