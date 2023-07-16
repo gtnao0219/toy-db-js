@@ -1,217 +1,195 @@
-import { promises as fsp } from "fs";
+import { promises as fsp, existsSync } from "fs";
+import path from "path";
 import { DiskManagerImpl } from "../../../src/storage/disk/disk_manager";
-import {
-  PAGE_SIZE,
-  Page,
-  PageDeserializer,
-} from "../../../src/storage/page/page";
+import { PAGE_SIZE } from "../../../src/storage/page/page";
 
 describe("DiskManagerImpl", () => {
-  describe("bootstrap", () => {
-    it("data file and log file are created", async () => {});
+  let diskManager: DiskManagerImpl;
+  const TEST_DATA_DIR = "./test_data";
+  const DATA_FILE = path.join(TEST_DATA_DIR, "data");
+  const LOG_FILE = path.join(TEST_DATA_DIR, "log");
+  beforeEach(async () => {
+    await fsp.mkdir(TEST_DATA_DIR, { recursive: true });
+    diskManager = new DiskManagerImpl(DATA_FILE, LOG_FILE);
   });
-  describe("reset", () => {});
-  // describe("existsDataFile", () => {
-  //   it("returns false if data file does not exist", () => {
-  //     const diskManager = new DiskManagerImpl(
-  //       "test/data/disk_manager/does_not_exist"
-  //     );
-  //     expect(diskManager.existsDataFile()).toBe(false);
-  //   });
-  //   it("returns true if data file exists", () => {
-  //     const diskManager = new DiskManagerImpl(
-  //       "test/data/disk_manager/empty_data"
-  //     );
-  //     expect(diskManager.existsDataFile()).toBe(true);
-  //   });
-  // });
-  // describe("createDataFile", () => {
-  //   it("creates empty data file", async () => {
-  //     const diskManager = new DiskManagerImpl(
-  //       "test/data/disk_manager/does_not_exist"
-  //     );
-  //     const created = await diskManager.createDataFile();
-  //     expect(created).toBe(true);
-  //     const stats = await fsp.stat("test/data/disk_manager/does_not_exist");
-  //     expect(stats.size).toBe(0);
-  //     // Cleanup
-  //     await fsp.unlink("test/data/disk_manager/does_not_exist");
-  //   });
-  //   it("does not create data file if it already exists", async () => {
-  //     const diskManager = new DiskManagerImpl(
-  //       "test/data/disk_manager/test_page_read_data"
-  //     );
-  //     const created = await diskManager.createDataFile();
-  //     expect(created).toBe(false);
-  //     const stats = await fsp.stat(
-  //       "test/data/disk_manager/test_page_read_data"
-  //     );
-  //     expect(stats.size).toBe(PAGE_SIZE * 2);
-  //   });
-  // });
-  describe("readPage", () => {
-    it("reads page from data file", async () => {
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_read_data"
-      );
-      const buffer = await diskManager.readPage(0);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < view.length; i++) {
-        expect(view[i]).toBe(1);
-      }
+  afterEach(async () => {
+    if (existsSync(DATA_FILE)) {
+      await fsp.unlink(DATA_FILE);
+    }
+    if (existsSync(LOG_FILE)) {
+      await fsp.unlink(LOG_FILE);
+    }
+    await fsp.rmdir(TEST_DATA_DIR);
+  });
+  describe("bootstrap", () => {
+    it("should initialize correctly if data and log files do not exist", async () => {
+      await diskManager.bootstrap();
+
+      expect(existsSync(DATA_FILE)).toBe(true);
+      expect(existsSync(LOG_FILE)).toBe(true);
     });
-    it("reads second page from data file", async () => {
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_read_data"
-      );
-      const buffer = await diskManager.readPage(1);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < view.length; i++) {
-        expect(view[i]).toBe(2);
+    it("should reset if only data file exists", async () => {
+      await fsp.writeFile(DATA_FILE, "Test data");
+
+      await diskManager.bootstrap();
+
+      const dataFileContent = await fsp.readFile(DATA_FILE);
+      const logFileContent = await fsp.readFile(LOG_FILE);
+      expect(dataFileContent.byteLength).toBe(0);
+      expect(logFileContent.byteLength).toBe(0);
+    });
+
+    it("should reset if only log file exists", async () => {
+      await fsp.writeFile(LOG_FILE, "Test log");
+
+      await diskManager.bootstrap();
+
+      const dataFileContent = await fsp.readFile(DATA_FILE);
+      const logFileContent = await fsp.readFile(LOG_FILE);
+      expect(dataFileContent.byteLength).toBe(0);
+      expect(logFileContent.byteLength).toBe(0);
+    });
+    it("should not initialize if data and log files exist", async () => {
+      await fsp.writeFile(DATA_FILE, "Test data");
+      await fsp.writeFile(LOG_FILE, "Test log");
+
+      await diskManager.bootstrap();
+
+      const dataFileContent = await fsp.readFile(DATA_FILE, "utf-8");
+      const logFileContent = await fsp.readFile(LOG_FILE, "utf-8");
+      expect(dataFileContent).toBe("Test data");
+      expect(logFileContent).toBe("Test log");
+    });
+  });
+  describe("reset", () => {
+    it("should delete and recreate data and log files", async () => {
+      await fsp.writeFile(DATA_FILE, "Test data");
+      await fsp.writeFile(LOG_FILE, "Test log");
+
+      await diskManager.reset();
+
+      const dataFileContent = await fsp.readFile(DATA_FILE);
+      const logFileContent = await fsp.readFile(LOG_FILE);
+      expect(dataFileContent.byteLength).toBe(0);
+      expect(logFileContent.byteLength).toBe(0);
+    });
+  });
+  describe("isEmpty", () => {
+    it("should return true if the data file is empty", async () => {
+      await diskManager.reset();
+
+      const isEmpty = await diskManager.isEmpty();
+
+      expect(isEmpty).toBe(true);
+    });
+
+    it("should return false if the data file is not empty", async () => {
+      await diskManager.reset();
+      await fsp.writeFile(DATA_FILE, "Test data");
+
+      const isEmpty = await diskManager.isEmpty();
+
+      expect(isEmpty).toBe(false);
+    });
+  });
+  describe("readPage", () => {
+    it("should read correct data from a specified page", async () => {
+      await diskManager.reset();
+      const firstPageBuffer = new Uint8Array(PAGE_SIZE);
+      const secondPageBuffer = new Uint8Array(PAGE_SIZE);
+      for (let i = 0; i < PAGE_SIZE; i++) {
+        firstPageBuffer[i] = i % 256;
+        secondPageBuffer[i] = (i + 1) % 256;
       }
+      await fsp.writeFile(
+        DATA_FILE,
+        Buffer.concat([firstPageBuffer, secondPageBuffer])
+      );
+
+      const resultBuffer = await diskManager.readPage(1);
+
+      expect(new Uint8Array(resultBuffer)).toEqual(secondPageBuffer);
     });
   });
   describe("writePage", () => {
-    it("writes page to data file", async () => {
-      // copy test data file
-      await fsp.copyFile(
-        "test/data/disk_manager/test_page_read_data",
-        "test/data/disk_manager/test_page_write_data"
+    it("should write correct data to a specified page", async () => {
+      await diskManager.reset();
+      const firstPageBuffer = new Uint8Array(PAGE_SIZE);
+      const secondPageBuffer = new Uint8Array(PAGE_SIZE);
+      const thirdPageBuffer = new Uint8Array(PAGE_SIZE);
+      const newSecondPageBuffer = new Uint8Array(PAGE_SIZE);
+      for (let i = 0; i < PAGE_SIZE; i++) {
+        firstPageBuffer[i] = i % 256;
+        secondPageBuffer[i] = (i + 1) % 256;
+        thirdPageBuffer[i] = (i + 2) % 256;
+        newSecondPageBuffer[i] = (i + 3) % 256;
+      }
+      await fsp.writeFile(
+        DATA_FILE,
+        Buffer.concat([firstPageBuffer, secondPageBuffer, thirdPageBuffer])
       );
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_write_data"
+
+      await diskManager.writePage(1, newSecondPageBuffer.buffer);
+
+      const dataFileContent = await fsp.readFile(DATA_FILE);
+      expect(dataFileContent.byteLength).toBe(PAGE_SIZE * 3);
+      expect(new Uint8Array(dataFileContent.subarray(0, PAGE_SIZE))).toEqual(
+        firstPageBuffer
       );
-      const buffer = new ArrayBuffer(PAGE_SIZE);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < view.length; i++) {
-        view[i] = 3;
-      }
-      await diskManager.writePage(2, buffer);
-      const newPageBuffer = await diskManager.readPage(2);
-      const newPageView = new Uint8Array(newPageBuffer);
-      for (let i = 0; i < newPageView.length; i++) {
-        expect(newPageView[i]).toBe(3);
-      }
-      const firstPageBuffer = await diskManager.readPage(0);
-      const firstPageView = new Uint8Array(firstPageBuffer);
-      for (let i = 0; i < firstPageView.length; i++) {
-        expect(firstPageView[i]).toBe(1);
-      }
-      // Cleanup
-      await fsp.unlink("test/data/disk_manager/test_page_write_data");
+      expect(
+        new Uint8Array(dataFileContent.subarray(PAGE_SIZE, PAGE_SIZE * 2))
+      ).toEqual(newSecondPageBuffer);
+      expect(new Uint8Array(dataFileContent.subarray(PAGE_SIZE * 2))).toEqual(
+        thirdPageBuffer
+      );
     });
   });
-  describe("readLog and writeLog", () => {
-    it("reads and writes log", async () => {
-      await fsp.copyFile(
-        "test/data/disk_manager/empty_log",
-        "test/data/disk_manager/temp_log"
+  describe("readLog", () => {
+    it("should read the entire log file", async () => {
+      await diskManager.reset();
+      const logBuffer = new Uint8Array([1, 2, 3, 4]);
+      await fsp.writeFile(LOG_FILE, logBuffer);
+
+      const resultBuffer = await diskManager.readLog();
+
+      expect(new Uint8Array(resultBuffer)).toEqual(logBuffer);
+    });
+  });
+  describe("writeLog", () => {
+    it("should append data to the log file", async () => {
+      await diskManager.reset();
+      const logBuffer1 = new Uint8Array([1, 2, 3, 4]);
+      await diskManager.writeLog(logBuffer1.buffer);
+      const logBuffer2 = new Uint8Array([5, 6, 7, 8]);
+
+      await diskManager.writeLog(logBuffer2.buffer);
+
+      const resultBuffer = await fsp.readFile(LOG_FILE);
+      expect(new Uint8Array(resultBuffer)).toEqual(
+        new Uint8Array([...logBuffer1, ...logBuffer2])
       );
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/empty_data",
-        "test/data/disk_manager/temp_log"
-      );
-      const buffer = new ArrayBuffer(4);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < view.length; i++) {
-        view[i] = i;
-      }
-      await diskManager.writeLog(buffer);
-      const logBuffer = await diskManager.readLog();
-      console.log(logBuffer);
-      const logView = new Uint8Array(logBuffer);
-      for (let i = 0; i < logView.length; i++) {
-        expect(logView[i]).toBe(i);
-      }
-      // Cleanup
-      await fsp.unlink("test/data/disk_manager/temp_log");
     });
   });
   describe("allocatePageId", () => {
-    it("returns 0 if data file is empty", async () => {
-      // copy test data file
-      await fsp.copyFile(
-        "test/data/disk_manager/empty_data",
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_temp_data"
-      );
+    it("should correctly allocate a new page id", async () => {
+      await diskManager.reset();
+      const pageBuffer = new Uint8Array(PAGE_SIZE);
+      await fsp.writeFile(DATA_FILE, pageBuffer);
+
       const pageId = await diskManager.allocatePageId();
-      expect(pageId).toBe(0);
-      const stats = await fsp.stat(
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      expect(stats.size).toBe(PAGE_SIZE);
-      // Cleanup
-      await fsp.unlink("test/data/disk_manager/test_page_temp_data");
+
+      expect(pageId).toBe(1);
+      const dataFileContent = await fsp.readFile(DATA_FILE);
+      expect(dataFileContent.byteLength).toBe(PAGE_SIZE * 2);
     });
-    it("returns 1 if data file has one page", async () => {
-      // copy test data file
-      await fsp.copyFile(
-        "test/data/disk_manager/test_page_read_data",
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      const pageId = await diskManager.allocatePageId();
-      expect(pageId).toBe(2);
-      const stats = await fsp.stat(
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      expect(stats.size).toBe(PAGE_SIZE * 3);
-      // Cleanup
-      await fsp.unlink("test/data/disk_manager/test_page_temp_data");
-    });
-    it("should allocate unique PageIds even when called concurrently", async () => {
-      // copy test data file
-      await fsp.copyFile(
-        "test/data/disk_manager/test_page_read_data",
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      const diskManager = new DiskManagerImpl(
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      const pageIds = await Promise.all([
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-        diskManager.allocatePageId(),
-      ]);
-      pageIds.sort((a, b) => a - b);
-      expect(pageIds).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-      const stats = await fsp.stat(
-        "test/data/disk_manager/test_page_temp_data"
-      );
-      expect(stats.size).toBe(PAGE_SIZE * 12);
-      // Cleanup
-      await fsp.unlink("test/data/disk_manager/test_page_temp_data");
+    it("should allocate unique page ids even in concurrent operations", async () => {
+      await diskManager.reset();
+      const promises = Array(10)
+        .fill(null)
+        .map(() => diskManager.allocatePageId());
+      const pageIds = await Promise.all(promises);
+      const uniquePageIds = new Set(pageIds);
+      expect(pageIds.length).toBe(uniquePageIds.size);
     });
   });
 });
-
-async function prepareTestPageReadData() {
-  const diskManager = new DiskManagerImpl(
-    "test/data/disk_manager/test_page_read_data"
-  );
-  diskManager.reset();
-  const firstPageBuffer = new ArrayBuffer(PAGE_SIZE);
-  const firstPageView = new Uint8Array(firstPageBuffer);
-  for (let i = 0; i < firstPageView.length; i++) {
-    firstPageView[i] = 1;
-  }
-  const secondPageBuffer = new ArrayBuffer(PAGE_SIZE);
-  const secondPageView = new Uint8Array(secondPageBuffer);
-  for (let i = 0; i < secondPageView.length; i++) {
-    secondPageView[i] = 2;
-  }
-  await diskManager.writePage(0, firstPageBuffer);
-  await diskManager.writePage(1, secondPageBuffer);
-}
