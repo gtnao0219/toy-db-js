@@ -23,13 +23,13 @@ import { DiskManagerImpl } from "../storage/disk/disk_manager";
     );
   `;
   const accountsIdIndexCreateSQL = `
-    CREATE INDEX accounts_id_idx;
+    CREATE INDEX accounts_id_idx ON accounts(id);
   `;
   const usersIdIndexCreateSQL = `
-    CREATE INDEX users_id_idx;
+    CREATE INDEX users_id_idx ON users(id);
   `;
   const usersAccountIdIndexCreateSQL = `
-    CREATE INDEX users_accountId_idx;
+    CREATE INDEX users_accountId_idx ON users(accountId);
   `;
   await instance.executeSQL(accountsTableCreateSQL, null);
   await instance.executeSQL(usersTableCreateSQL, null);
@@ -75,6 +75,11 @@ import { DiskManagerImpl } from "../storage/disk/disk_manager";
     const sql = `INSERT INTO users VALUES (${user[0]}, ${user[1]}, '${user[2]}', ${user[3]})`;
     await instance.executeSQL(sql, transactionId);
   }
+
+  await instance.executeSQL(accountsIdIndexCreateSQL, null);
+  await instance.executeSQL(usersIdIndexCreateSQL, null);
+  await instance.executeSQL(usersAccountIdIndexCreateSQL, null);
+
   await instance.executeSQL("COMMIT;", transactionId);
   await instance.shutdown();
 })();

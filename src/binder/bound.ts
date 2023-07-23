@@ -11,6 +11,7 @@ import { LiteralValue } from "../parser/token";
 export type BoundStatement =
   | BoundCreateTableStatement
   | BoundDropTableStatement
+  | BoundCreateIndexStatement
   | BoundSelectStatement
   | BoundInsertStatement
   | BoundUpdateStatement
@@ -23,6 +24,12 @@ export type BoundCreateTableStatement = {
 export type BoundDropTableStatement = {
   type: "drop_table_statement";
   tableReference: BoundBaseTableReference;
+};
+export type BoundCreateIndexStatement = {
+  type: "create_index_statement";
+  indexName: string;
+  tableName: string;
+  columnName: string;
 };
 export type BoundSelectStatement = {
   type: "select_statement";

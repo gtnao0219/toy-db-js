@@ -1,5 +1,10 @@
 import { RID } from "../../common/RID";
 import {
+  BPlusTreeInternalPage,
+  BPlusTreeInternalPageDeserializer,
+  B_PLUS_TREE_INTERNAL_PAGE_TYPE,
+} from "./b_plus_tree_internal_page";
+import {
   INVALID_PAGE_ID,
   PAGE_SIZE,
   Page,
@@ -30,7 +35,7 @@ type BPlusTreeLeafPageEntry = {
   value: RID;
 };
 
-const B_PLUS_TREE_LEAF_PAGE_TYPE = 1;
+export const B_PLUS_TREE_LEAF_PAGE_TYPE = 1;
 
 export class BPlusTreeLeafPage extends Page {
   constructor(
@@ -90,11 +95,14 @@ export class BPlusTreeLeafPage extends Page {
     }
     return buffer;
   }
+  isFull(): boolean {
+    return this._entries.length >= MAX_ENTRY_COUNT;
+  }
   keyAt(index: number): number {
     return this._entries[index].key;
   }
-  valueAt(index: number): RID {
-    return this._entries[index].value;
+  getItem(index: number): BPlusTreeLeafPageEntry {
+    return this._entries[index];
   }
   keyIndex(key: number): number {
     let ng = -1;
@@ -113,14 +121,32 @@ export class BPlusTreeLeafPage extends Page {
     const index = this.keyIndex(key);
     this._entries.splice(index, 0, { key, value });
   }
-  lookup(key: number): RID | null {
+  moveHalfTo(recipient: BPlusTreeLeafPage): void {
+    const moveStartIndex = Math.floor(MAX_ENTRY_COUNT / 2);
+    const moveSize = this._entries.length - moveStartIndex;
+    const moveEntries = this._entries.splice(moveStartIndex, moveSize);
+    recipient.copyNFrom(moveEntries);
+    this._entries.splice(moveStartIndex);
+  }
+  copyNFrom(entries: BPlusTreeLeafPageEntry[]): void {
+    this._entries.push(...entries);
+  }
+  lookup(key: number): RID[] | null {
     const index = this.keyIndex(key);
     if (index >= this._entries.length || this._entries[index].key !== key) {
       return null;
     }
-    return this._entries[index].value;
+    const rids: RID[] = [];
+    for (let i = index; i < this._entries.length; ++i) {
+      if (this._entries[i].key === key) {
+        rids.push(this._entries[i].value);
+      } else {
+        break;
+      }
+    }
+    return rids;
   }
-  deleteByKey(key: number): void {
+  removeByKey(key: number): void {
     const index = this.keyIndex(key);
     const nextIndex = this.keyIndex(key + 1);
     this._entries.splice(index, nextIndex - index);
@@ -180,5 +206,21 @@ export class BPlusTreeLeafPageGenerator implements PageGenerator {
     nextPageId: number = INVALID_PAGE_ID
   ): BPlusTreeLeafPage {
     return new BPlusTreeLeafPage(pageId, parentPageId, nextPageId);
+  }
+}
+
+export class BPlusTreePageDeserializer implements PageDeserializer {
+  deserialize(
+    buffer: ArrayBuffer
+  ): Promise<BPlusTreeLeafPage | BPlusTreeInternalPage> {
+    const dataView = new DataView(buffer);
+    const type = dataView.getInt32(HEADER_PAGE_ID_SIZE);
+    if (type === B_PLUS_TREE_LEAF_PAGE_TYPE) {
+      return new BPlusTreeLeafPageDeserializer().deserialize(buffer);
+    } else if (type === B_PLUS_TREE_INTERNAL_PAGE_TYPE) {
+      return new BPlusTreeInternalPageDeserializer().deserialize(buffer);
+    } else {
+      throw new Error(`Unexpected page type ${type}`);
+    }
   }
 }

@@ -3,6 +3,7 @@ import { LiteralValue } from "./token";
 export type StatementAST =
   | CreateTableStatementAST
   | DropTableStatementAST
+  | CreateIndexStatementAST
   | SelectStatementAST
   | InsertStatementAST
   | UpdateStatementAST
@@ -22,6 +23,12 @@ export type TableElementAST = {
 export type DropTableStatementAST = {
   type: "drop_table_statement";
   tableName: string;
+};
+export type CreateIndexStatementAST = {
+  type: "create_index_statement";
+  indexName: string;
+  tableName: string;
+  columnName: string;
 };
 export type SelectStatementAST = {
   type: "select_statement";

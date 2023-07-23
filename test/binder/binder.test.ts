@@ -12,6 +12,7 @@ import {
 } from "../../src/parser/ast";
 import { LogManagerImpl } from "../../src/recovery/log_manager";
 import { DiskManagerImpl } from "../../src/storage/disk/disk_manager";
+import { BPlusTreeIndex } from "../../src/storage/index/b_plus_tree_index";
 import { TableHeap } from "../../src/storage/table/table_heap";
 import { Type } from "../../src/type/type";
 
@@ -21,6 +22,16 @@ class MockCatalog implements Catalog {
     tableName: string,
     schema: Schema,
     transaction: Transaction
+  ): Promise<void> {}
+  async createIndex(
+    indexName: string,
+    tableName: string,
+    columnName: string,
+    transaction: Transaction
+  ): Promise<void> {}
+  async updateIndexRootPageId(
+    indexName: string,
+    rootPageId: number
   ): Promise<void> {}
   async getOidByTableName(tableName: string): Promise<number> {
     switch (tableName) {
@@ -61,6 +72,20 @@ class MockCatalog implements Catalog {
   }
   async getIndexesByOid(oid: number): Promise<IndexInfo[]> {
     return [];
+  }
+  async getIndexByOid(indexOid: number): Promise<IndexInfo> {
+    return {
+      oid: 1,
+      name: "foo_pkey",
+      tableOid: 1,
+      columnName: "id",
+      index: new BPlusTreeIndex(
+        "foo_pkey",
+        new BufferPoolManagerImpl(new DiskManagerImpl()),
+        this,
+        1
+      ),
+    };
   }
 }
 describe("Binder", () => {

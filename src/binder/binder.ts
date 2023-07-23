@@ -3,6 +3,7 @@ import { Column } from "../catalog/column";
 import { Schema } from "../catalog/schema";
 import {
   BinaryOperationExpressionAST,
+  CreateIndexStatementAST,
   CreateTableStatementAST,
   DeleteStatementAST,
   DropTableStatementAST,
@@ -37,6 +38,7 @@ import {
   BoundDropTableStatement,
   BoundSelectElement,
   BoundFunctionCallExpression,
+  BoundCreateIndexStatement,
 } from "./bound";
 
 type Scope =
@@ -52,6 +54,8 @@ export class Binder {
         return this.bindCreateTable(ast);
       case "drop_table_statement":
         return this.bindDropTable(ast);
+      case "create_index_statement":
+        return this.bindCreateIndex(ast);
       case "select_statement":
         return this.bindSelect(ast);
       case "insert_statement":
@@ -101,6 +105,14 @@ export class Binder {
     return {
       type: "drop_table_statement",
       tableReference,
+    };
+  }
+  bindCreateIndex(ast: CreateIndexStatementAST): BoundCreateIndexStatement {
+    return {
+      type: "create_index_statement",
+      indexName: ast.indexName,
+      tableName: ast.tableName,
+      columnName: ast.columnName,
     };
   }
   async bindSelect(ast: SelectStatementAST): Promise<BoundSelectStatement> {

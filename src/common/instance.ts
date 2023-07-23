@@ -109,6 +109,21 @@ export class Instance {
             transactionId == null ? null : transaction.transactionId,
           rows: [],
         };
+      case "create_index_statement":
+        await this._catalog.createIndex(
+          statement.indexName,
+          statement.tableName,
+          statement.columnName,
+          transaction
+        );
+        if (transactionId == null) {
+          await this._transactionManager.commit(transaction);
+        }
+        return {
+          transactionId:
+            transactionId == null ? null : transaction.transactionId,
+          rows: [],
+        };
     }
 
     const planNode = plan(statement);

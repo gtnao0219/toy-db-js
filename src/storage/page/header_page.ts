@@ -74,6 +74,14 @@ export class HeaderPage extends Page {
     });
     return true;
   }
+  update(oid: number, firstPageId: number): boolean {
+    const entryIndex = this._entries.findIndex((entry) => entry.oid === oid);
+    if (entryIndex === -1) {
+      return false;
+    }
+    this._entries[entryIndex].firstPageId = firstPageId;
+    return true;
+  }
 }
 
 export class HeaderPageDeserializer implements PageDeserializer {

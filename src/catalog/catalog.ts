@@ -2,6 +2,7 @@ import { BufferPoolManager } from "../buffer/buffer_pool_manager";
 import { Transaction } from "../concurrency/transaction";
 import { TransactionManager } from "../concurrency/transaction_manager";
 import { LogManager } from "../recovery/log_manager";
+import { BPlusTreeIndex } from "../storage/index/b_plus_tree_index";
 import {
   HeaderPage,
   HeaderPageDeserializer,
@@ -46,7 +47,7 @@ export type IndexInfo = {
   name: string;
   tableOid: number;
   columnName: string;
-  // index: Index
+  index: BPlusTreeIndex;
 };
 
 export interface Catalog {
@@ -56,10 +57,18 @@ export interface Catalog {
     schema: Schema,
     transaction: Transaction
   ): Promise<void>;
+  createIndex(
+    indexName: string,
+    tableName: string,
+    columnName: string,
+    transaction: Transaction
+  ): Promise<void>;
+  updateIndexRootPageId(indexName: string, rootPageId: number): Promise<void>;
   getOidByTableName(tableName: string): Promise<number>;
   getSchemaByOid(oid: number): Promise<Schema>;
   getTableHeapByOid(oid: number): Promise<TableHeap>;
   getIndexesByOid(oid: number): Promise<IndexInfo[]>;
+  getIndexByOid(indexOid: number): Promise<IndexInfo>;
 }
 
 export class CatalogImpl implements Catalog {
@@ -190,11 +199,12 @@ export class CatalogImpl implements Catalog {
   ): Promise<void> {
     const tableOid = await this.getOidByTableName(tableName);
     const schema = await this.getSchemaByOid(tableOid);
-    const column = schema.columns.find((c) => c.name === columnName);
-    if (column == null) {
+    const columnIndex = schema.columns.findIndex((c) => c.name === columnName);
+    if (columnIndex === -1) {
       throw new Error(`column ${columnName} not found`);
     }
     const oid = this.iterateOid();
+    this.insertHeaderPageEntry(oid, INVALID_PAGE_ID);
     const indexInfoHeap = await this.indexInformationSchemaTableHeap();
     await indexInfoHeap.insertTuple(
       new Tuple(INDEX_INFORMATION_SCHEMA_SCHEMA, [
@@ -205,7 +215,18 @@ export class CatalogImpl implements Catalog {
       ]),
       transaction
     );
-    // TODO: rows have been already inserted into the table, so we need to build the index
+    const index = new BPlusTreeIndex(
+      indexName,
+      this._bufferPoolManager,
+      this,
+      INVALID_PAGE_ID
+    );
+    const tableHeap = await this.getTableHeapByOid(tableOid);
+    const tuples = await tableHeap.scan();
+    for (const tuple of tuples) {
+      const key = tuple.tuple.values[columnIndex];
+      await index.insert(key.value, tuple.rid);
+    }
   }
   private iterateOid(): number {
     return this._nextOid++;
@@ -228,6 +249,16 @@ export class CatalogImpl implements Catalog {
       }
     }
     throw new Error("Table not found");
+  }
+  async getOidByIndexName(indexName: string): Promise<number> {
+    const heap = await this.indexInformationSchemaTableHeap();
+    const tuples = await heap.scan();
+    for (const tuple of tuples) {
+      if (tuple.tuple.values[1].value === indexName) {
+        return tuple.tuple.values[0].value;
+      }
+    }
+    throw new Error("Index not found");
   }
   private async getFirstPageIdByTableName(tableName: string): Promise<number> {
     const oid = await this.getOidByTableName(tableName);
@@ -265,25 +296,60 @@ export class CatalogImpl implements Catalog {
       schema
     );
   }
+  async getIndexByOid(indexOid: number): Promise<IndexInfo> {
+    const firstPageId = await this.getFirstPageIdByOid(indexOid);
+    const heap = await this.indexInformationSchemaTableHeap();
+    const tuples = await heap.scan();
+    const tuple = tuples.find((tuple) => {
+      return tuple.tuple.values[0].value === indexOid;
+    });
+    if (tuple == null) {
+      throw new Error("Index not found");
+    }
+    return {
+      oid: tuple.tuple.values[0].value,
+      name: tuple.tuple.values[1].value,
+      tableOid: tuple.tuple.values[2].value,
+      columnName: tuple.tuple.values[3].value,
+      index: new BPlusTreeIndex(
+        tuple.tuple.values[1].value,
+        this._bufferPoolManager,
+        this,
+        firstPageId
+      ),
+    };
+  }
   private async getTableHeapByTableName(tableName: string): Promise<TableHeap> {
     const oid = await this.getOidByTableName(tableName);
     return this.getTableHeapByOid(oid);
   }
   async getIndexesByOid(tableOid: number): Promise<IndexInfo[]> {
     const heap = await this.indexInformationSchemaTableHeap();
-    const tuples = await heap.scan();
-    return tuples
-      .filter((tuple) => {
-        return tuple.tuple.values[2].value === tableOid;
+    const tuples = (await heap.scan()).filter((tuple) => {
+      return tuple.tuple.values[2].value === tableOid;
+    });
+    const indexes = await Promise.all(
+      tuples.map(async (tuple) => {
+        const firstPageId = await this.getFirstPageIdByOid(
+          tuple.tuple.values[0].value
+        );
+        return new BPlusTreeIndex(
+          tuple.tuple.values[1].value,
+          this._bufferPoolManager,
+          this,
+          firstPageId
+        );
       })
-      .map((tuple) => {
-        return {
-          oid: tuple.tuple.values[0].value,
-          name: tuple.tuple.values[1].value,
-          tableOid: tuple.tuple.values[2].value,
-          columnName: tuple.tuple.values[3].value,
-        };
-      });
+    );
+    return tuples.map((tuple, i) => {
+      return {
+        oid: tuple.tuple.values[0].value,
+        name: tuple.tuple.values[1].value,
+        tableOid: tuple.tuple.values[2].value,
+        columnName: tuple.tuple.values[3].value,
+        index: indexes[i],
+      };
+    });
   }
   private async headerPageEntries(): Promise<HeaderPageEntry[]> {
     const entries: HeaderPageEntry[] = [];
@@ -347,6 +413,34 @@ export class CatalogImpl implements Catalog {
       prevPageId = pageId;
       pageId = page.nextPageId;
       this._bufferPoolManager.unpinPage(prevPageId, false);
+    }
+  }
+  async updateIndexRootPageId(
+    indexName: string,
+    rootPageId: number
+  ): Promise<void> {
+    const indexOid = await this.getOidByIndexName(indexName);
+    this.updateHeaderPageEntry(indexOid, rootPageId);
+  }
+  private async updateHeaderPageEntry(
+    oid: number,
+    firstPageId: number
+  ): Promise<void> {
+    let pageId = HEADER_PAGE_ID;
+    while (pageId !== INVALID_PAGE_ID) {
+      const page = await this._bufferPoolManager.fetchPage(
+        pageId,
+        new HeaderPageDeserializer()
+      );
+      if (!(page instanceof HeaderPage)) {
+        throw new Error("invalid page type");
+      }
+      if (page.update(oid, firstPageId)) {
+        this._bufferPoolManager.unpinPage(pageId, true);
+        return;
+      }
+      this._bufferPoolManager.unpinPage(pageId, false);
+      pageId = page.nextPageId;
     }
   }
   private async tableInformationSchemaTableHeap(): Promise<TableHeap> {

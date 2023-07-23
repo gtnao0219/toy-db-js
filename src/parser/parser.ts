@@ -2,6 +2,7 @@ import {
   AssignmentAST,
   BeginStatementAST,
   CommitStatementAST,
+  CreateIndexStatementAST,
   CreateTableStatementAST,
   DeleteStatementAST,
   DropTableStatementAST,
@@ -40,7 +41,12 @@ export class Parser {
       throw new Error(`Expected keyword but got ${token.type}`);
     }
     if (this.matchKeyword("CREATE")) {
-      return this.createTableStatement();
+      if (this.matchKeywordLookahead(1, "TABLE")) {
+        return this.createTableStatement();
+      }
+      if (this.matchKeywordLookahead(1, "INDEX")) {
+        return this.createIndexStatement();
+      }
     } else if (this.matchKeyword("DROP")) {
       return this.dropTableStatement();
     } else if (this.matchKeyword("INSERT")) {
@@ -92,6 +98,22 @@ export class Parser {
     return {
       columnName,
       dataType,
+    };
+  }
+  private createIndexStatement(): CreateIndexStatementAST {
+    this.consumeKeywordOrError("CREATE");
+    this.consumeKeywordOrError("INDEX");
+    const indexName = this.consumeIdentifierOrError();
+    this.consumeKeywordOrError("ON");
+    const tableName = this.consumeIdentifierOrError();
+    this.consumeOrError("left_paren");
+    const columnName = this.consumeIdentifierOrError();
+    this.consumeOrError("right_paren");
+    return {
+      type: "create_index_statement",
+      indexName,
+      tableName,
+      columnName,
     };
   }
   private dropTableStatement(): DropTableStatementAST {
@@ -542,6 +564,13 @@ export class Parser {
   private matchKeyword(keyword: string): boolean {
     const current = this.tokens[this.position];
     return current.type === "keyword" && current.value === keyword;
+  }
+  private matchKeywordLookahead(offset: number, keyword: string): boolean {
+    if (this.position + offset >= this.tokens.length) {
+      return false;
+    }
+    const token = this.tokens[this.position + offset];
+    return token.type === "keyword" && token.value === keyword;
   }
   private consume(tokenType: string): boolean {
     if (this.tokens[this.position].type === tokenType) {

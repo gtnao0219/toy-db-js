@@ -1,18 +1,21 @@
+import { IndexInfo } from "../../catalog/catalog";
 import { RID } from "../../common/RID";
 import { LockMode } from "../../concurrency/lock_manager";
 import { IsolationLevel } from "../../concurrency/transaction";
 import { TableHeap, TupleWithRID } from "../../storage/table/table_heap";
-import { Type } from "../../type/type";
 import { ExecutorContext } from "../executor_context";
-import { evaluate } from "../expression_plan";
+import {
+  BinaryOperationExpressionPlanNode,
+  LiteralExpressionPlanNode,
+} from "../expression_plan";
 import { IndexScanPlanNode } from "../plan";
 import { Executor, ExecutorType } from "./executor";
 
 export class IndexScanExecutor extends Executor {
-  // TODO: implement iterator
   private _rids: RID[] = [];
   private _cursor: number = 0;
   private _tableHeap: TableHeap | null = null;
+  private _index: IndexInfo | null = null;
 
   constructor(
     protected _executorContext: ExecutorContext,
@@ -26,25 +29,16 @@ export class IndexScanExecutor extends Executor {
       LockMode.INTENTION_SHARED,
       this._planNode.tableOid
     );
-    // TODO: index scan
+    this._index = await this._executorContext.catalog.getIndexByOid(
+      this._planNode.indexOid
+    );
+    const right = (
+      this._planNode.condition as BinaryOperationExpressionPlanNode
+    ).right as LiteralExpressionPlanNode;
+    this._rids = await this._index.index.getValues(right.value as number);
     this._tableHeap = await this._executorContext.catalog.getTableHeapByOid(
       this._planNode.tableOid
     );
-    const tuples = await this._tableHeap.scan();
-    const schema = this._tableHeap.schema;
-    this._rids = tuples
-      .filter((tuple) => {
-        const evaluated = evaluate(
-          this._planNode.condition,
-          tuple.tuple,
-          schema
-        );
-        if (evaluated.type === Type.BOOLEAN && evaluated.value) {
-          return true;
-        }
-        return false;
-      })
-      .map((tuple) => tuple.rid);
   }
   async next(): Promise<TupleWithRID | null> {
     if (this._cursor >= this._rids.length) {
