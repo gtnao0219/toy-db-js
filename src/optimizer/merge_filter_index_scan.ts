@@ -23,7 +23,7 @@ export async function optimizeFilterIndexScan(
     for (const index of indexes) {
       if (
         index.columnName ===
-        schema.columns[newPlan.condition.left.tupleIndex].name
+        schema.columns[newPlan.condition.left.columnIndex].name
       ) {
         return {
           type: "index_scan",
